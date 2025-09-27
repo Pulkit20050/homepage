@@ -1,234 +1,145 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Veriface - Attendance Capture</title>
+import os
+import base64
+import time
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from PIL import Image
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+# Import DeepFace and Pandas for the core logic
+from deepface import DeepFace
+import pandas as pd
 
-  <style>
-    :root {
-      --primary-blue: #2c5282;
-      --secondary-blue: #3a72b3;
-      --light-gray: #f7fafc;
-      --medium-gray: #e2e8f0;
-      --dark-gray: #4a5568;
-      --text-color: #2d3748;
-    }
-    body { font-family: system-ui, sans-serif; margin: 0; background-color: var(--light-gray); color: var(--text-color); }
-    .header {
-      background-color: var(--primary-blue); padding: 1rem 2rem;
-      display: flex; justify-content: space-between; align-items: center;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .brand { font-size: 1.5rem; font-weight: bold; color: white; }
-    .nav a {
-      color: white; text-decoration: none; padding: 0.5rem 1rem;
-      margin-left: 0.5rem; border-radius: 6px; font-weight: 500;
-    }
-    .nav a.active, .nav a:hover { background-color: var(--secondary-blue); }
+# 1. Initialize the Flask App and CORS
+# =======================================
+app = Flask(__name__)
+CORS(app)
 
-    .main-content { padding: 2rem; display: flex; flex-direction: column; align-items: center; }
-    .capture-card {
-      background-color: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-      padding: 2.5rem; text-align: center; width: 100%; max-width: 800px;
-    }
-    .capture-card h2 { margin-top: 0; font-size: 1.5rem; }
-    .capture-card p { color: var(--dark-gray); margin-bottom: 2rem; }
-    .camera-icon-container { cursor: pointer; margin-bottom: 2rem; }
-    .camera-icon { width: 80px; height: 80px; color: var(--primary-blue); }
-    .upload-btn {
-      background-color: #d1d5db; color: #6b7280; padding: 0.75rem 2rem;
-      border: none; border-radius: 6px; font-size: 1rem; font-weight: 500;
-      cursor: not-allowed; transition: background-color 0.2s;
-    }
-    .upload-btn:not(:disabled) {
-      background-color: var(--primary-blue); color: white; cursor: pointer;
-    }
-    .upload-btn:not(:disabled):hover { background-color: var(--secondary-blue); }
 
-    /* Modal */
-    .modal-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background-color: rgba(0, 0, 0, 0.7);
-      display: none; justify-content: center; align-items: center;
-      z-index: 1000;
-    }
-    .modal-content {
-      position: relative; background-color: #2d3748; padding: 1rem;
-      border-radius: 12px; width: 90%; max-width: 680px;
-    }
-    .modal-close-btn {
-      position: absolute; top: -15px; right: -15px;
-      background-color: white; color: var(--dark-gray);
-      border: none; border-radius: 50%; width: 30px; height: 30px;
-      font-size: 1.2rem; cursor: pointer; display: flex; justify-content: center; align-items: center;
-    }
-    .modal-video-container {
-      position: relative; width: 100%; padding-top: 75%;
-      background: #000; border-radius: 8px; overflow: hidden;
-    }
-    #webcam, #output_canvas {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    }
-    #webcam { transform: scaleX(-1); }
-    .modal-capture-btn {
-      background-color: white; border: 4px solid var(--primary-blue);
-      border-radius: 50%; width: 60px; height: 60px;
-      cursor: pointer; display: block; margin: 1.5rem auto 0.5rem;
-    }
+# 2. Define and Create Necessary Directories
+# ===========================================
+# Get the directory where this script is located
+BASE_DIR = os.path.dirname(__file__)
 
-    /* Gallery */
-    .photo-gallery {
-      display: flex; flex-wrap: wrap; justify-content: center; gap: 15px;
-      margin-top: 2rem; width: 100%; max-width: 900px;
-    }
-    .photo-gallery img {
-      width: 160px; height: 120px; border: 3px solid var(--medium-gray);
-      border-radius: 8px; object-fit: cover; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .status { margin-top: 1.5rem; font-size: 1rem; font-weight: bold; min-height: 24px; }
-  </style>
-</head>
-<body>
+# Define paths for uploads, the face database, and reports
+UPLOADS_DIR = os.path.join(BASE_DIR, 'uploads')
+DATABASE_DIR = os.path.join(BASE_DIR, 'database')
+REPORTS_DIR = os.path.join(BASE_DIR, 'reports')
 
-  <header class="header">
-    <div class="brand">Veriface</div>
-    <nav class="nav">
-      <a href="#" class="active">Capture</a>
-      <a href="#">Student-List</a>
-      <a href="#">Insights</a>
-    </nav>
-  </header>
+# Create these directories if they don't already exist
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(DATABASE_DIR, exist_ok=True)
+os.makedirs(REPORTS_DIR, exist_ok=True)
 
-  <main class="main-content">
-    <div class="capture-card">
-      <h2>Capture Attendance</h2>
-      <p>Click the camera to take one or more photos of the class.</p>
-      <div id="openModalBtn" class="camera-icon-container">
-        <svg class="camera-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 10.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5zm7.5-6.5H16.5c-.41-1.16-1.52-2-2.83-2h-3.33c-1.31 0-2.42.84-2.83 2H4.5C3.12 4 2 5.12 2 6.5v11C2 18.88 3.12 20 4.5 20h15c1.38 0 2.5-1.12 2.5-2.5v-11C22 5.12 20.88 4 19.5 4zm-7.5 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
-        </svg>
-      </div>
-      <button id="uploadBtn" class="upload-btn" disabled>Upload Attendance</button>
-    </div>
-    <p id="status" class="status"></p>
-    <div id="photoGallery" class="photo-gallery"></div>
-  </main>
 
-  <div id="cameraModal" class="modal-overlay">
-    <div class="modal-content">
-      <button id="closeModalBtn" class="modal-close-btn">&times;</button>
-      <div class="modal-video-container">
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="output_canvas" width="640" height="480"></canvas>
-      </div>
-      <button id="modalCaptureBtn" class="modal-capture-btn"></button>
-    </div>
-  </div>
+# 3. Create the API Endpoint for Uploading
+# ==========================================
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    try:
+        # Get the list of base64 image strings from the request
+        data = request.get_json()
+        images = data.get('images')
 
-  <script>
-    const openModalBtn = document.getElementById('openModalBtn');
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    const cameraModal = document.getElementById('cameraModal');
-    const modalCaptureBtn = document.getElementById('modalCaptureBtn');
-    const videoElement = document.getElementById('webcam');
-    const canvasElement = document.getElementById('output_canvas');
-    const canvasCtx = canvasElement.getContext('2d');
-    const uploadBtn = document.getElementById('uploadBtn');
-    const photoGallery = document.getElementById('photoGallery');
-    const statusEl = document.getElementById('status');
+        if not images or not isinstance(images, list):
+            return jsonify({'message': 'No images received.'}), 400
 
-    // ✅ Fixed backend URL
-    // Change the port number from 3000 to 5000
-    const SERVER_URL = 'https://your-ngrok-url.ngrok-free.app:5000/upload';
+        # --- Save and Process Uploaded Images ---
+        saved_files = []
+        for index, base64_image in enumerate(images):
+            try:
+                # Decode the base64 string
+                header, encoded_data = base64_image.split(',', 1)
+                image_data = base64.b64decode(encoded_data)
+                
+                # Create a unique filename using a timestamp
+                file_name = f'capture-{int(time.time())}-{index}.png'
+                file_path = os.path.join(UPLOADS_DIR, file_name)
 
-    let camera = null;
+                # Save the decoded image to the 'uploads' directory
+                with open(file_path, 'wb') as f:
+                    f.write(image_data)
+                
+                saved_files.append(file_name)
+            except (ValueError, TypeError) as e:
+                print(f"Skipping malformed base64 string at index {index}: {e}")
+                continue
+        
+        print(f"{len(saved_files)} images saved successfully.")
 
-    // === Modal and Camera ===
-    function openModal() {
-      cameraModal.style.display = 'flex';
-      startCamera();
-    }
-    function closeModal() {
-      cameraModal.style.display = 'none';
-      stopCamera();
-    }
-    function startCamera() {
-      camera = new Camera(videoElement, {
-        onFrame: async () => { await faceDetection.send({ image: videoElement }); },
-        width: 640, height: 480
-      });
-      camera.start();
-    }
-    function stopCamera() {
-      if (camera) {
-        camera.stop();
-        camera = null;
-      }
-    }
+        # --- Perform Face Recognition on Saved Images ---
+        recognition_results = []
+        for file_name in saved_files:
+            image_path = os.path.join(UPLOADS_DIR, file_name)
+            
+            # --- OPTIMIZATION: Resize the image before recognition ---
+            try:
+                img = Image.open(image_path)
+                # Resize to a max width of 640px, maintaining aspect ratio
+                if img.width > 640:
+                    w_percent = (640 / float(img.width))
+                    h_size = int((float(img.height) * float(w_percent)))
+                    img = img.resize((640, h_size), Image.Resampling.LANCZOS)
+                    img.save(image_path)
+            except Exception as e:
+                print(f"Could not resize image {file_name}: {e}")
+                continue # Skip to the next file if resizing fails
 
-    // === Mediapipe Face Detection ===
-    const faceDetection = new FaceDetection({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` });
-    faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.5 });
-    function onResults(results) {
-      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-      if (results.detections) {
-        for (const detection of results.detections) {
-          drawRectangle(canvasCtx, detection.boundingBox, { color: 'red', lineWidth: 4, fillColor: '#00000000' });
-        }
-      }
-    }
-    faceDetection.onResults(onResults);
+            # --- Run Face Recognition ---
+            try:
+                # Use DeepFace.find with the fast 'yunet' detector
+                dfs = DeepFace.find(
+                    img_path=image_path,
+                    db_path=DATABASE_DIR,
+                    model_name='ArcFace',
+                    enforce_detection=False,
+                    detector_backend='yunet'
+                )
 
-    // === Capture Photo ===
-    function capturePhoto() {
-      if (!camera) return;
-      const imageDataUrl = canvasElement.toDataURL('image/png');
-      const img = document.createElement('img');
-      img.src = imageDataUrl;
-      img.alt = "Captured Photo";
-      photoGallery.appendChild(img);
-      uploadBtn.disabled = false;
-    }
+                if dfs and not dfs[0].empty:
+                    # Get the identity of the best match
+                    identity_path = dfs[0].iloc[0]['identity']
+                    person_name = os.path.basename(os.path.dirname(identity_path))
+                    recognition_results.append({
+                        'uploaded_file': file_name,
+                        'identified_person': person_name.replace("_", " ").title()
+                    })
+                else:
+                    recognition_results.append({
+                        'uploaded_file': file_name,
+                        'identified_person': 'Unknown'
+                    })
 
-    // === Upload Photos ===
-    async function uploadPhotos() {
-      const images = document.querySelectorAll('#photoGallery img');
-      if (images.length === 0) {
-        statusEl.textContent = 'No photos to upload.';
-        return;
-      }
-      statusEl.textContent = 'Uploading...';
-      uploadBtn.disabled = true;
-      const imageData = Array.from(images).map(img => img.src);
-      try {
-        const response = await fetch(SERVER_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images: imageData })
-        });
-        if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
-        const result = await response.json();
-        statusEl.textContent = `✅ ${result.message}`;
-      } catch (error) {
-        console.error('Upload failed:', error);
-        statusEl.textContent = `❌ Upload failed. See console for details.`;
-      } finally {
-        uploadBtn.disabled = false;
-      }
-    }
+            except Exception as e:
+                print(f"Could not process {file_name} for recognition: {e}")
+                recognition_results.append({
+                    'uploaded_file': file_name,
+                    'identified_person': f'Recognition Error'
+                })
 
-    // === Event Listeners ===
-    openModalBtn.addEventListener('click', openModal);
-    closeModalBtn.addEventListener('click', closeModal);
-    modalCaptureBtn.addEventListener('click', capturePhoto);
-    uploadBtn.addEventListener('click', uploadPhotos);
-  </script>
-</body>
-</html>
+        # --- Create and Save the Excel Report ---
+        if recognition_results:
+            df = pd.DataFrame(recognition_results)
+            report_filename = f'Recognition_Report_{int(time.time())}.xlsx'
+            report_path = os.path.join(REPORTS_DIR, report_filename)
+            
+            df.to_excel(report_path, index=False)
+            print(f"Excel report saved to {report_path}")
+            
+            return jsonify({
+                'message': f'Upload and recognition complete! Report saved as {report_filename}',
+                'files_saved': len(saved_files),
+                'report_file': report_filename
+            }), 200
+        else:
+            return jsonify({'message': 'Images uploaded but no recognition was performed.'}), 200
+
+    except Exception as e:
+        print(f"An unexpected server error occurred: {e}")
+        return jsonify({'message': 'An unexpected server error occurred.'}), 500
+
+
+# 4. Run the Flask App
+# =======================
+if __name__ == '__main__':
+    # Run the app on all available network interfaces on port 3000
+    app.run(host='0.0.0.0', port=5000, debug=True)
