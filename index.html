@@ -1,188 +1,234 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Consulting Detective's Digital Dossier</title>
-    <!-- Classic Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Noto+Serif:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-primary: #fdf8f0; /* Warm parchment/off-white */
-            --bg-secondary: #efebe9; /* Slightly darker paper/light wood */
-            --bg-wood-dark: #5D4037; /* Dark wood tone */
-            --text-primary: #3E2723; /* Dark brown text */
-            --text-secondary: #6D4C41; /* Muted brown text */
-            --accent-primary: #8B0000; /* Deep red (like leather or velvet) */
-            --accent-secondary: #B8860B; /* Muted gold/brass */
-            --border-color: #8D6E63; /* Mid-brown border */
-            --shadow-color: rgba(93, 64, 55, 0.2); /* Brownish shadow */
-            --font-heading: 'Merriweather', serif;
-            --font-body: 'Noto Serif', serif;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Veriface - Attendance Capture</title>
 
-        body {
-            font-family: var(--font-body);
-            background-color: var(--bg-wood-dark); /* Dark wood background */
-            /* Optional: Subtle wood texture */
-            /* background-image: url('path/to/dark-wood-texture.png'); */
-            color: var(--text-primary);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh; /* Use min-height for flexibility */
-            margin: 0;
-            padding: 40px 20px; /* Add padding for spacing */
-            flex-direction: column;
-        }
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
 
-        .main-container {
-            background-color: var(--bg-primary); /* Parchment background for content */
-            padding: 40px 50px;
-            border-radius: 8px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4), inset 0 0 15px var(--shadow-color);
-            border: 1px solid var(--border-color);
-            max-width: 1000px;
-            width: 90%;
-            text-align: center;
-        }
+  <style>
+    :root {
+      --primary-blue: #2c5282;
+      --secondary-blue: #3a72b3;
+      --light-gray: #f7fafc;
+      --medium-gray: #e2e8f0;
+      --dark-gray: #4a5568;
+      --text-color: #2d3748;
+    }
+    body { font-family: system-ui, sans-serif; margin: 0; background-color: var(--light-gray); color: var(--text-color); }
+    .header {
+      background-color: var(--primary-blue); padding: 1rem 2rem;
+      display: flex; justify-content: space-between; align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .brand { font-size: 1.5rem; font-weight: bold; color: white; }
+    .nav a {
+      color: white; text-decoration: none; padding: 0.5rem 1rem;
+      margin-left: 0.5rem; border-radius: 6px; font-weight: 500;
+    }
+    .nav a.active, .nav a:hover { background-color: var(--secondary-blue); }
 
-        h1 {
-            font-family: var(--font-heading);
-            font-size: 2.8em; /* Slightly larger */
-            margin-bottom: 15px;
-            color: var(--text-primary);
-            text-shadow: 1px 1px 2px var(--shadow-color);
-        }
+    .main-content { padding: 2rem; display: flex; flex-direction: column; align-items: center; }
+    .capture-card {
+      background-color: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      padding: 2.5rem; text-align: center; width: 100%; max-width: 800px;
+    }
+    .capture-card h2 { margin-top: 0; font-size: 1.5rem; }
+    .capture-card p { color: var(--dark-gray); margin-bottom: 2rem; }
+    .camera-icon-container { cursor: pointer; margin-bottom: 2rem; }
+    .camera-icon { width: 80px; height: 80px; color: var(--primary-blue); }
+    .upload-btn {
+      background-color: #d1d5db; color: #6b7280; padding: 0.75rem 2rem;
+      border: none; border-radius: 6px; font-size: 1rem; font-weight: 500;
+      cursor: not-allowed; transition: background-color 0.2s;
+    }
+    .upload-btn:not(:disabled) {
+      background-color: var(--primary-blue); color: white; cursor: pointer;
+    }
+    .upload-btn:not(:disabled):hover { background-color: var(--secondary-blue); }
 
-        .intro-text {
-            font-size: 1.1em;
-            color: var(--text-secondary);
-            margin-bottom: 40px;
-            font-style: italic;
-            max-width: 700px;
-            margin-left: auto;
-            margin-right: auto;
-            line-height: 1.6;
-        }
+    /* Modal */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: none; justify-content: center; align-items: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      position: relative; background-color: #2d3748; padding: 1rem;
+      border-radius: 12px; width: 90%; max-width: 680px;
+    }
+    .modal-close-btn {
+      position: absolute; top: -15px; right: -15px;
+      background-color: white; color: var(--dark-gray);
+      border: none; border-radius: 50%; width: 30px; height: 30px;
+      font-size: 1.2rem; cursor: pointer; display: flex; justify-content: center; align-items: center;
+    }
+    .modal-video-container {
+      position: relative; width: 100%; padding-top: 75%;
+      background: #000; border-radius: 8px; overflow: hidden;
+    }
+    #webcam, #output_canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    }
+    #webcam { transform: scaleX(-1); }
+    .modal-capture-btn {
+      background-color: white; border: 4px solid var(--primary-blue);
+      border-radius: 50%; width: 60px; height: 60px;
+      cursor: pointer; display: block; margin: 1.5rem auto 0.5rem;
+    }
 
-        .card-container {
-            display: flex;
-            justify-content: center; /* Center cards */
-            width: 100%;
-            flex-wrap: wrap;
-            gap: 30px; /* Increased gap */
-        }
-
-        .card {
-            background-color: var(--bg-secondary); /* Light paper */
-            border-radius: 6px;
-            box-shadow: 0 4px 8px var(--shadow-color);
-            padding: 25px;
-            width: 260px; /* Slightly wider */
-            text-align: center;
-            transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
-            border: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column; /* Align items vertically */
-            justify-content: space-between; /* Push button to bottom */
-        }
-
-        .card:hover {
-            transform: translateY(-5px) scale(1.03); /* Lift and slightly enlarge */
-            box-shadow: 0 8px 15px var(--shadow-color);
-        }
-
-        .card h2 {
-            font-family: var(--font-heading);
-            font-size: 1.6em; /* Adjusted size */
-            margin-top: 0;
-            margin-bottom: 10px;
-            color: var(--accent-primary); /* Deep red heading */
-        }
-
-        .card p {
-            font-size: 1em; /* Adjusted size */
-            color: var(--text-secondary);
-            margin-bottom: 25px; /* More space before button */
-            line-height: 1.5;
-            flex-grow: 1; /* Allow description to take available space */
-        }
-
-        .card a {
-            text-decoration: none;
-            color: var(--bg-primary); /* Light text on dark button */
-            background-color: var(--text-primary); /* Dark brown button */
-            padding: 12px 22px;
-            border-radius: 4px;
-            font-weight: bold;
-            border: 1px solid var(--border-color);
-            transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
-            display: inline-block; /* Needed for padding and margin */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .card a:hover {
-            background-color: var(--accent-primary); /* Deep red on hover */
-            color: white;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-
-        /* Responsive Adjustments */
-        @media (max-width: 768px) {
-            .main-container { padding: 30px 25px; }
-            h1 { font-size: 2.2em; }
-            .intro-text { font-size: 1em; }
-            .card { width: 220px; }
-            .card h2 { font-size: 1.4em; }
-            .card p { font-size: 0.95em; }
-            .card a { padding: 10px 18px; }
-        }
-         @media (max-width: 550px) {
-            .card-container { gap: 20px; }
-            .card { width: 80%; max-width: 300px; } /* Stack cards on small screens */
-         }
-
-    </style>
+    /* Gallery */
+    .photo-gallery {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 15px;
+      margin-top: 2rem; width: 100%; max-width: 900px;
+    }
+    .photo-gallery img {
+      width: 160px; height: 120px; border: 3px solid var(--medium-gray);
+      border-radius: 8px; object-fit: cover; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .status { margin-top: 1.5rem; font-size: 1rem; font-weight: bold; min-height: 24px; }
+  </style>
 </head>
 <body>
-    <div class="main-container">
-        <h1>The Consulting Detective's Digital Dossier</h1>
-        <p class="intro-text">
-            Welcome, associate. Within these digital confines lie the tools, records, and diversions essential to our peculiar line of work. The game is afoot – choose your instrument wisely.
-        </p>
-        <div class="card-container">
-            <!-- Intentplay Card (Linking to progress.html) -->
-            <div class="card">
-                <h2>Video and conference browser</h2>
-                <p>Sharpen focus, calibrate daily performance, and manage cognitive exercises.</p>
-                <a href="http://pulkit20050.github.io/Siteplay/" target="_blank">Enter Palace</a>
-            </div>
-            <!-- Researcher Card -->
-            <div class="card">
-                <h2>Focus Pal</h2>
-                <p>Small amount of progress is valuable for being a great detective, Let's compound.</p>
-                <a href="https://pulkit20050.github.io/Progresstracker/" target="_blank">Access Desk</a>
-            </div>
 
-            <!-- Intentread Card (Linking to brainer.html) -->
-            <div class="card">
-                <h2>Search for papers</h2>
-                <p>A repository of articles, blogs, and research materials for deeper investigation.</p>
-                <a href="https://pulkit20050.github.io/Siteread/" target="_blank">Consult Library</a>
-            </div>
+  <header class="header">
+    <div class="brand">Veriface</div>
+    <nav class="nav">
+      <a href="#" class="active">Capture</a>
+      <a href="#">Student-List</a>
+      <a href="#">Insights</a>
+    </nav>
+  </header>
 
-            <!-- Booktracker Card (Placeholder Link) -->
-            <div class="card">
-                <h2>Track reading</h2>
-                <p>Log and manage your literary investigations and reading records.</p>
-                <!-- Update href when booktracker.html exists -->
-                <a href="https://pulkit20050.github.io/AISITE/" target="_blank">Open Ledger</a>
-            </div>
-        </div>
+  <main class="main-content">
+    <div class="capture-card">
+      <h2>Capture Attendance</h2>
+      <p>Click the camera to take one or more photos of the class.</p>
+      <div id="openModalBtn" class="camera-icon-container">
+        <svg class="camera-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 10.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5zm7.5-6.5H16.5c-.41-1.16-1.52-2-2.83-2h-3.33c-1.31 0-2.42.84-2.83 2H4.5C3.12 4 2 5.12 2 6.5v11C2 18.88 3.12 20 4.5 20h15c1.38 0 2.5-1.12 2.5-2.5v-11C22 5.12 20.88 4 19.5 4zm-7.5 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+        </svg>
+      </div>
+      <button id="uploadBtn" class="upload-btn" disabled>Upload Attendance</button>
     </div>
+    <p id="status" class="status"></p>
+    <div id="photoGallery" class="photo-gallery"></div>
+  </main>
+
+  <div id="cameraModal" class="modal-overlay">
+    <div class="modal-content">
+      <button id="closeModalBtn" class="modal-close-btn">&times;</button>
+      <div class="modal-video-container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas" width="640" height="480"></canvas>
+      </div>
+      <button id="modalCaptureBtn" class="modal-capture-btn"></button>
+    </div>
+  </div>
+
+  <script>
+    const openModalBtn = document.getElementById('openModalBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const cameraModal = document.getElementById('cameraModal');
+    const modalCaptureBtn = document.getElementById('modalCaptureBtn');
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const photoGallery = document.getElementById('photoGallery');
+    const statusEl = document.getElementById('status');
+
+    // ✅ Fixed backend URL
+    // Change the port number from 3000 to 5000
+    const SERVER_URL = 'https://your-ngrok-url.ngrok-free.app:5000/upload';
+
+    let camera = null;
+
+    // === Modal and Camera ===
+    function openModal() {
+      cameraModal.style.display = 'flex';
+      startCamera();
+    }
+    function closeModal() {
+      cameraModal.style.display = 'none';
+      stopCamera();
+    }
+    function startCamera() {
+      camera = new Camera(videoElement, {
+        onFrame: async () => { await faceDetection.send({ image: videoElement }); },
+        width: 640, height: 480
+      });
+      camera.start();
+    }
+    function stopCamera() {
+      if (camera) {
+        camera.stop();
+        camera = null;
+      }
+    }
+
+    // === Mediapipe Face Detection ===
+    const faceDetection = new FaceDetection({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` });
+    faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.5 });
+    function onResults(results) {
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+      if (results.detections) {
+        for (const detection of results.detections) {
+          drawRectangle(canvasCtx, detection.boundingBox, { color: 'red', lineWidth: 4, fillColor: '#00000000' });
+        }
+      }
+    }
+    faceDetection.onResults(onResults);
+
+    // === Capture Photo ===
+    function capturePhoto() {
+      if (!camera) return;
+      const imageDataUrl = canvasElement.toDataURL('image/png');
+      const img = document.createElement('img');
+      img.src = imageDataUrl;
+      img.alt = "Captured Photo";
+      photoGallery.appendChild(img);
+      uploadBtn.disabled = false;
+    }
+
+    // === Upload Photos ===
+    async function uploadPhotos() {
+      const images = document.querySelectorAll('#photoGallery img');
+      if (images.length === 0) {
+        statusEl.textContent = 'No photos to upload.';
+        return;
+      }
+      statusEl.textContent = 'Uploading...';
+      uploadBtn.disabled = true;
+      const imageData = Array.from(images).map(img => img.src);
+      try {
+        const response = await fetch(SERVER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ images: imageData })
+        });
+        if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
+        const result = await response.json();
+        statusEl.textContent = `✅ ${result.message}`;
+      } catch (error) {
+        console.error('Upload failed:', error);
+        statusEl.textContent = `❌ Upload failed. See console for details.`;
+      } finally {
+        uploadBtn.disabled = false;
+      }
+    }
+
+    // === Event Listeners ===
+    openModalBtn.addEventListener('click', openModal);
+    closeModalBtn.addEventListener('click', closeModal);
+    modalCaptureBtn.addEventListener('click', capturePhoto);
+    uploadBtn.addEventListener('click', uploadPhotos);
+  </script>
 </body>
 </html>
-
-
-
