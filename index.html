@@ -104,11 +104,13 @@
         .modal-close-btn:hover { background-color: var(--border-color); color: var(--text-dark); }
         
         .modal-video-container {
-            position: relative; width: 100%; padding-top: 75%;
+            position: relative; width: 100%; padding-top: 75%; /* 4:3 Aspect Ratio */
             background: #000; border-radius: 8px; overflow: hidden;
         }
         #webcam, #output_canvas {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            /* FIXED: Prevents stretching/distortion of the camera view */
+            object-fit: cover;
         }
         #webcam { transform: scaleX(-1); }
         .modal-capture-btn {
@@ -129,6 +131,21 @@
         }
         .checkbox-item { display: flex; align-items: center; cursor: pointer; gap: 0.75rem; }
         .checkbox-item input { accent-color: var(--primary-color); }
+        .report-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1rem;
+        }
+        .tab-btn {
+            padding: 0.75rem 1.25rem; cursor: pointer; border: none;
+            background-color: transparent; font-family: 'Poppins', sans-serif;
+            font-weight: 500; font-size: 1rem; color: var(--text-light);
+            border-bottom: 3px solid transparent;
+        }
+        .tab-btn.active {
+            color: var(--primary-color);
+            border-bottom: 3px solid var(--primary-color);
+        }
         .report-table {
             width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem;
         }
@@ -146,7 +163,7 @@
         }
         .photo-gallery img {
             width: 100%;
-            aspect-ratio: 4 / 3; /* FIXED: Prevents image distortion */
+            aspect-ratio: 4 / 3;
             border: 3px solid var(--border-color);
             border-radius: 8px; object-fit: cover; box-shadow: var(--shadow);
             transition: all 0.2s ease-in-out;
@@ -164,7 +181,6 @@
             border-top: 1px solid var(--border-color); text-align: right;
         }
         
-        /* Desktop styles */
         @media (min-width: 640px) {
             .brand { font-size: 1.5rem; }
             .nav a { font-size: 1rem; padding: 0.5rem 1rem; margin-left: 0.5rem; }
@@ -176,48 +192,62 @@
 </head>
 <body>
     
-    <header class="header">
-        <div class="brand">Veriface</div>
-        <nav class="nav">
-            <a id="captureNav" class="active">Capture</a>
-            <a id="studentListNav">Student-List</a>
-            <a id="insightsNav">Insights</a>
-        </nav>
-    </header>
+    <header class="header"></header>
 
-    <main class="main-content">
-        <div class="capture-card">
-            <h2>Capture Attendance</h2>
-            <p>Click the camera to start a session. You can capture multiple photos of the class.</p>
-            <div id="openCameraModalBtn" class="camera-icon-container">
-                <svg class="camera-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.776 48.776 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>
-            </div>
-            <div class="action-buttons">
-                <button id="openLateModalBtn" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    Mark Late Arrivals
-                </button>
-                <button id="uploadBtn" class="btn btn-primary" disabled>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
-                    Upload Attendance
-                </button>
-            </div>
-        </div>
-        <p id="status" class="status"></p>
-        <div id="photoGallery" class="photo-gallery"></div>
-    </main>
+    <main class="main-content"></main>
 
-    <div id="cameraModal" class="modal-overlay"><div class="modal-content camera-modal-content"><button id="closeCameraModalBtn" class="modal-close-btn">&times;</button><div class="modal-video-container"><video id="webcam" autoplay playsinline></video><canvas id="output_canvas" width="640" height="480"></canvas></div><button id="modalCaptureBtn" class="modal-capture-btn"></button></div></div>
-    <div id="lateModal" class="modal-overlay"><div class="modal-content late-modal-content"><button id="closeLateModalBtn" class="modal-close-btn">&times;</button><h3>Mark Late Arrivals</h3><div id="lateStudentChecklist" class="checkbox-list"></div><div class="modal-footer"><button id="submitLateBtn" class="btn btn-primary">Submit</button></div></div></div>
-    <div id="reportModal" class="modal-overlay"><div class="modal-content report-modal-content"><button id="closeReportModalBtn" class="modal-close-btn">&times;</button><h3>Latest Attendance Report</h3><div id="reportContent" class="report-content"></div></div></div>
+    <div id="cameraModal" class="modal-overlay"></div>
+    <div id="lateModal" class="modal-overlay"></div>
+    <div id="reportModal" class="modal-overlay"></div>
 
     <script>
-        const openCameraModalBtn=document.getElementById("openCameraModalBtn"),closeCameraModalBtn=document.getElementById("closeCameraModalBtn"),cameraModal=document.getElementById("cameraModal"),openLateModalBtn=document.getElementById("openLateModalBtn"),closeLateModalBtn=document.getElementById("closeLateModalBtn"),lateModal=document.getElementById("lateModal"),studentListNav=document.getElementById("studentListNav"),reportModal=document.getElementById("reportModal"),closeReportModalBtn=document.getElementById("closeReportModalBtn"),reportContent=document.getElementById("reportContent"),modalCaptureBtn=document.getElementById("modalCaptureBtn"),videoElement=document.getElementById("webcam"),canvasElement=document.getElementById("output_canvas"),canvasCtx=canvasElement.getContext("2d"),uploadBtn=document.getElementById("uploadBtn"),photoGallery=document.getElementById("photoGallery"),statusEl=document.getElementById("status"),lateStudentChecklist=document.getElementById("lateStudentChecklist"),submitLateBtn=document.getElementById("submitLateBtn");
-        
-        // UPDATED: Replaced localhost with your ngrok URL
+        const openCameraModalBtn=document.getElementById("openCameraModalBtn"),closeCameraModalBtn=document.getElementById("closeCameraModalBtn"),cameraModal=document.getElementById("cameraModal"),openLateModalBtn=document.getElementById("openLateModalBtn"),closeLateModalBtn=document.getElementById("closeLateModalBtn"),lateModal=document.getElementById("lateModal"),studentListNav=document.getElementById("studentListNav"),reportModal=document.getElementById("reportModal"),closeReportModalBtn=document.getElementById("closeReportModalBtn"),reportContent=document.getElementById("reportContent"),modalCaptureBtn=document.getElementById("modalCaptureBtn"),videoElement=document.getElementById("webcam"),canvasElement=document.getElementById("output_canvas"),canvasCtx=canvasElement.getContext("2d"),uploadBtn=document.getElementById("uploadBtn"),photoGallery=document.getElementById("photoGallery"),statusEl=document.getElementById("status"),lateStudentChecklist=document.getElementById("lateStudentChecklist"),submitLateBtn=document.getElementById("submitLateBtn"),tabAll=document.getElementById("tabAll"),tabLate=document.getElementById("tabLate");
         const SERVER_URL = 'https://nonpapistical-nonembellishing-bev.ngrok-free.dev';
+        let camera=null,currentReportData=[];const studentList=["Student A","Student B","Student C","Chris Evans","Elon Musk","Emma Watson","John Doe","Jane Smith"];function populateLateCheckboxes(){lateStudentChecklist.innerHTML="",studentList.forEach(e=>{const t=document.createElement("div");t.className="checkbox-item",t.innerHTML=`<input type="checkbox" id="student-${e.replace(/\s+/g,"-")}"><label for="student-${e.replace(/\s+/g,"-")}">${e}</label>`,lateStudentChecklist.appendChild(t)})}document.addEventListener("DOMContentLoaded",populateLateCheckboxes);function openCameraModal(){cameraModal.classList.add("show"),startCamera()}function closeCameraModal(){cameraModal.classList.remove("show"),stopCamera()}function openLateModal(){lateModal.classList.add("show")}function closeLateModal(){lateModal.classList.remove("show")}function openReportModal(){reportModal.classList.add("show")}function closeReportModal(){reportModal.classList.remove("show")}async function fetchAndDisplayReport(){reportContent.innerHTML="<p>Loading report...</p>",openReportModal();try{const e=await fetch(`${SERVER_URL}/get-latest-report`);if(!e.ok)throw new Error("Failed to fetch report.");currentReportData=await e.json(),renderReportTable("all"),tabAll.classList.add("active"),tabLate.classList.remove("active")}catch(e){reportContent.innerHTML=`<p style="color: #dc2626;">Error: ${e.message}</p>`}}function renderReportTable(e){let t=currentReportData;"late"===(e)&&(t=currentReportData.filter(e=>"Late Arrival"===e.Status));if(0===t.length)return void(reportContent.innerHTML="<p>No students found for this filter.</p>");const o=document.createElement("table");o.className="report-table",o.innerHTML="<thead><tr><th>Timestamp</th><th>Name</th><th>Status</th></tr></thead>";const n=document.createElement("tbody");t.forEach(e=>{const t=document.createElement("tr"),o=e.Status||"N/A",a=o.toLowerCase().replace(/\s+/g,"-");t.innerHTML=`<td>${e.Timestamp||"N/A"}</td><td>${e.Name||"N/A"}</td><td class="${a}">${o}</td>`,n.appendChild(t)}),o.appendChild(n),reportContent.innerHTML="",reportContent.appendChild(o)}
         
-        let camera=null;const studentList=["Student A","Student B","Student C","Chris Evans","Elon Musk","Emma Watson","John Doe","Jane Smith"];function populateLateCheckboxes(){lateStudentChecklist.innerHTML="",studentList.forEach(e=>{const t=document.createElement("div");t.className="checkbox-item",t.innerHTML=`<input type="checkbox" id="student-${e.replace(/\s+/g,"-")}"><label for="student-${e.replace(/\s+/g,"-")}">${e}</label>`,lateStudentChecklist.appendChild(t)})}document.addEventListener("DOMContentLoaded",populateLateCheckboxes);function openCameraModal(){cameraModal.classList.add("show"),startCamera()}function closeCameraModal(){cameraModal.classList.remove("show"),stopCamera()}function openLateModal(){lateModal.classList.add("show")}function closeLateModal(){lateModal.classList.remove("show")}function openReportModal(){reportModal.classList.add("show")}function closeReportModal(){reportModal.classList.remove("show")}async function fetchAndDisplayReport(){reportContent.innerHTML="<p>Loading report...</p>",openReportModal();try{const e=await fetch(`${SERVER_URL}/get-latest-report`);if(!e.ok){const t=await e.json();throw new Error(t.message||"Failed to fetch report.")}const t=await e.json();if(0===t.length)return void(reportContent.innerHTML="<p>No attendance data found in the latest report.</p>");const o=document.createElement("table");o.className="report-table";const n=document.createElement("thead");n.innerHTML="<tr><th>Timestamp</th><th>Name</th><th>Status</th></tr>",o.appendChild(n);const a=document.createElement("tbody");t.forEach(e=>{const t=document.createElement("tr"),o=e["Status (Present/Absent)"]||"N/A",n=o.toLowerCase().replace(" ","-");t.innerHTML=`<td>${e.Timestamp||"N/A"}</td><td>${e.Name||"N/A"}</td><td class="${n}">${o}</td>`,a.appendChild(t)}),o.appendChild(a),reportContent.innerHTML="",reportContent.appendChild(o)}catch(e){reportContent.innerHTML=`<p style="color: #dc2626;">Error: ${e.message}</p>`,console.error("Failed to fetch report:",e)}}function startCamera(){const e={video:{facingMode:"environment"}};camera=new Camera(videoElement,{onFrame:async()=>{await faceDetection.send({image:videoElement})},width:640,height:480,constraints:e}),camera.start()}function stopCamera(){camera&&(camera.stop(),camera=null)}const faceDetection=new FaceDetection({locateFile:e=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${e}`});faceDetection.setOptions({model:"short",minDetectionConfidence:.5});function onResults(e){canvasCtx.clearRect(0,0,canvasElement.width,canvasElement.height),canvasCtx.drawImage(e.image,0,0,canvasElement.width,canvasElement.height),e.detections&&e.detections.forEach(e=>{drawRectangle(canvasCtx,e.boundingBox,{color:"#4f46e5",lineWidth:4,fillColor:"#00000000"})})}faceDetection.onResults(onResults);function capturePhoto(){if(!camera)return;const e=canvasElement.toDataURL("image/jpeg",.7),t=document.createElement("img");t.src=e,t.alt="Captured Photo",photoGallery.appendChild(t),uploadBtn.disabled=!1}async function uploadPhotos(){const e=document.querySelectorAll("#photoGallery img");if(0===e.length)return statusEl.textContent="No photos to upload.",void(statusEl.className="status info");statusEl.textContent="Uploading & Processing...",statusEl.className="status info",uploadBtn.disabled=!0;const t=Array.from(e).map(e=>e.src);try{const e=await fetch(`${SERVER_URL}/upload`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:t})});if(!e.ok)throw new Error(`Server error: ${e.statusText}`);const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success"}catch(e){console.error("Upload failed:",e),statusEl.textContent=`❌ Upload failed. See console for details.`,statusEl.className="status error"}finally{uploadBtn.disabled=!1}}async function submitLateArrivals(){const e=document.querySelectorAll('#lateStudentChecklist input[type="checkbox"]:checked');if(0===e.length)return void alert("Please select at least one student.");const t=Array.from(e).map(e=>e.parentElement.querySelector("label").textContent);submitLateBtn.disabled=!0,submitLateBtn.textContent="Submitting...";try{const e=await fetch(`${SERVER_URL}/mark-late`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({late_students:t})});if(!e.ok)throw new Error("Server failed to process the request.");const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success",closeLateModal()}catch(e){console.error("Failed to submit late arrivals:",e),statusEl.textContent=`❌ Failed to submit late arrivals.`,statusEl.className="status error"}finally{submitLateBtn.disabled=!1,submitLateBtn.textContent="Submit"}}openCameraModalBtn.addEventListener("click",openCameraModal),closeCameraModalBtn.addEventListener("click",closeCameraModal),openLateModalBtn.addEventListener("click",openLateModal),closeLateModalBtn.addEventListener("click",closeLateModal),studentListNav.addEventListener("click",fetchAndDisplayReport),closeReportModalBtn.addEventListener("click",closeReportModal),modalCaptureBtn.addEventListener("click",capturePhoto),uploadBtn.addEventListener("click",uploadPhotos),submitLateBtn.addEventListener("click",submitLateArrivals);
+        // --- UPDATED: Mobile-friendly camera start function ---
+        function startCamera() {
+            // Use flexible constraints to avoid the "string pattern" error and help select the rear camera
+            const constraints = {
+                video: {
+                    facingMode: 'environment', // Prefer the rear camera
+                    width: { ideal: 1280 },   // Ask for a preferred width
+                    height: { ideal: 720 }     // Ask for a preferred height
+                }
+            };
+            
+            camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    // Make sure the canvas size matches the video stream size to prevent stretching in MediaPipe
+                    if (videoElement.videoWidth > 0 && (canvasElement.width !== videoElement.videoWidth || canvasElement.height !== videoElement.videoHeight)) {
+                        canvasElement.width = videoElement.videoWidth;
+                        canvasElement.height = videoElement.videoHeight;
+                    }
+                    await faceDetection.send({ image: videoElement });
+                },
+                constraints: constraints // Pass the flexible constraints
+            });
+            camera.start();
+        }
+
+        function stopCamera(){camera&&(camera.stop(),camera=null)}const faceDetection=new FaceDetection({locateFile:e=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${e}`});faceDetection.setOptions({model:"short",minDetectionConfidence:.5});function onResults(e){canvasCtx.clearRect(0,0,canvasElement.width,canvasElement.height),canvasCtx.drawImage(e.image,0,0,canvasElement.width,canvasElement.height),e.detections&&e.detections.forEach(e=>{drawRectangle(canvasCtx,e.boundingBox,{color:"#4f46e5",lineWidth:4,fillColor:"#00000000"})})}faceDetection.onResults(onResults);
+        
+        // --- UPDATED: Capture function to respect video's true aspect ratio ---
+        function capturePhoto(){
+            if(!camera || !videoElement.videoWidth) return; // Wait until video is initialized
+            
+            // Set canvas dimensions to the actual video stream dimensions to prevent distortion
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            // Draw the current video frame to the canvas
+            canvasCtx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
+            const imageDataUrl=canvasElement.toDataURL("image/jpeg",.7);
+            const img=document.createElement("img");
+            img.src=imageDataUrl,img.alt="Captured Photo",photoGallery.appendChild(img),uploadBtn.disabled=!1
+        }
+        
+        async function uploadPhotos(){const e=document.querySelectorAll("#photoGallery img");if(0===e.length)return statusEl.textContent="No photos to upload.",void(statusEl.className="status info");statusEl.textContent="Uploading & Processing...",statusEl.className="status info",uploadBtn.disabled=!0;const t=Array.from(e).map(e=>e.src);try{const e=await fetch(`${SERVER_URL}/upload`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:t})});if(!e.ok)throw new Error(`Server error: ${e.statusText}`);const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success"}catch(e){console.error("Upload failed:",e),statusEl.textContent=`❌ Upload failed. See console for details.`,statusEl.className="status error"}finally{uploadBtn.disabled=!1}}async function submitLateArrivals(){const e=document.querySelectorAll('#lateStudentChecklist input[type="checkbox"]:checked');if(0===e.length)return void alert("Please select at least one student.");const t=Array.from(e).map(e=>e.parentElement.querySelector("label").textContent);submitLateBtn.disabled=!0,submitLateBtn.textContent="Submitting...";try{const e=await fetch(`${SERVER_URL}/mark-late`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({late_students:t})});if(!e.ok)throw new Error("Server failed to process the request.");const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success",closeLateModal()}catch(e){console.error("Failed to submit late arrivals:",e),statusEl.textContent=`❌ Failed to submit late arrivals.`,statusEl.className="status error"}finally{submitLateBtn.disabled=!1,submitLateBtn.textContent="Submit"}}openCameraModalBtn.addEventListener("click",openCameraModal),closeCameraModalBtn.addEventListener("click",closeCameraModal),openLateModalBtn.addEventListener("click",openLateModal),closeLateModalBtn.addEventListener("click",closeLateModal),studentListNav.addEventListener("click",fetchAndDisplayReport),closeReportModalBtn.addEventListener("click",closeReportModal),modalCaptureBtn.addEventListener("click",capturePhoto),uploadBtn.addEventListener("click",uploadPhotos),submitLateBtn.addEventListener("click",submitLateArrivals),tabAll.addEventListener("click",()=>{renderReportTable("all"),tabAll.classList.add("active"),tabLate.classList.remove("active")}),tabLate.addEventListener("click",()=>{renderReportTable("late"),tabLate.classList.add("active"),tabAll.classList.remove("active")});
     </script>
 </body>
 </html>
