@@ -1,253 +1,151 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Veriface - Attendance Capture</title>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
-    
-    <style>
-        :root {
-            --primary-color: #4f46e5;
-            --primary-hover: #4338ca;
-            --secondary-color: #64748b;
-            --secondary-hover: #475569;
-            --bg-light: #f8fafc;
-            --bg-white: #ffffff;
-            --border-color: #e2e8f0;
-            --text-dark: #1e293b;
-            --text-light: #64748b;
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        }
-        *, *::before, *::after { box-sizing: border-box; }
-        body {
-            font-family: 'Poppins', sans-serif; margin: 0; background-color: var(--bg-light);
-            color: var(--text-dark); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-        }
+import os
+import base64
+import time
+from datetime import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from PIL import Image
 
-        .header {
-            background-color: var(--bg-white); padding: 1rem 1.5rem;
-            display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .brand { font-size: 1.25rem; font-weight: 700; color: var(--primary-color); }
-        .nav a {
-            color: var(--text-light); text-decoration: none; padding: 0.5rem 0.75rem;
-            margin-left: 0.25rem; border-radius: 6px; font-weight: 500; transition: all 0.2s ease-in-out;
-            cursor: pointer; font-size: 0.9rem;
-        }
-        .nav a.active { background-color: var(--primary-color); color: white; }
-        .nav a:not(.active):hover { color: var(--primary-color); }
+# It's good practice to handle potential import errors
+try:
+    from deepface import DeepFace
+    import pandas as pd
+except ImportError:
+    print("ERROR: One or more required Python packages are not installed.")
+    print("Please run: pip install Flask Flask-CORS deepface pandas openpyxl Pillow tf-keras")
+    exit()
 
-        .main-content {
-            padding: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem;
-        }
-        .capture-card {
-            background-color: var(--bg-white); border-radius: 12px; box-shadow: var(--shadow);
-            padding: 2rem; text-align: center; width: 100%; max-width: 700px;
-        }
-        .capture-card h2 { margin-top: 0; font-size: 1.5rem; font-weight: 600; }
-        .capture-card p {
-            color: var(--text-light); margin-bottom: 2rem;
-            max-width: 400px; margin-left: auto; margin-right: auto;
-        }
-        .camera-icon-container { cursor: pointer; margin-bottom: 2rem; transition: transform 0.2s ease-in-out; }
-        .camera-icon-container:hover { transform: scale(1.1); }
-        .camera-icon { width: 64px; height: 64px; color: var(--primary-color); }
+# 1. Initialize the Flask App and CORS
+app = Flask(__name__)
+CORS(app)
 
-        .action-buttons {
-            display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;
-        }
-        .btn {
-            display: inline-flex; align-items: center; justify-content: center;
-            gap: 0.5rem; padding: 0.75rem 1.25rem;
-            border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 500;
-            font-family: 'Poppins', sans-serif; cursor: pointer; transition: all 0.2s ease-in-out;
-            width: 100%; max-width: 220px;
-        }
-        .btn svg { width: 20px; height: 20px; }
-        .btn-primary { background-color: var(--primary-color); color: white; }
-        .btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-2px); }
-        .btn-secondary { background-color: var(--secondary-color); color: white; }
-        .btn-secondary:hover { background-color: var(--secondary-hover); transform: translateY(-2px); }
-        .btn:disabled {
-            background-color: #d1d5db; color: #9ca3af; cursor: not-allowed; transform: none;
-        }
+# 2. Define and Create Necessary Directories
+BASE_DIR = os.path.dirname(__file__)
+UPLOADS_DIR = os.path.join(BASE_DIR, 'uploads')
+DATABASE_DIR = os.path.join(BASE_DIR, 'database')
+REPORTS_DIR = os.path.join(BASE_DIR, 'reports')
 
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.5); display: none;
-            justify-content: center; align-items: center; z-index: 1000;
-            opacity: 0; transition: opacity 0.3s ease-in-out; padding: 1rem;
-        }
-        .modal-overlay.show { display: flex; opacity: 1; }
-        .modal-content {
-            position: relative; background-color: var(--bg-white); padding: 1.5rem;
-            border-radius: 12px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-            width: 100%; transform: scale(0.95); transition: transform 0.3s ease-in-out;
-        }
-        .modal-overlay.show .modal-content { transform: scale(1); }
-        .modal-close-btn {
-            position: absolute; top: 10px; right: 10px; background-color: var(--bg-light);
-            color: var(--text-light); border: none; border-radius: 50%; width: 32px; height: 32px;
-            font-size: 1.5rem; cursor: pointer; display: flex;
-            justify-content: center; align-items: center; transition: all 0.2s ease-in-out; z-index: 10;
-        }
-        .modal-close-btn:hover { background-color: var(--border-color); color: var(--text-dark); }
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(DATABASE_DIR, exist_ok=True)
+os.makedirs(REPORTS_DIR, exist_ok=True)
+
+# 3. Helper Functions
+def get_known_students(db_path):
+    """Gets a clean, sorted list of student names from the database subdirectories."""
+    try:
+        students = [d for d in os.listdir(db_path) if os.path.isdir(os.path.join(db_path, d))]
+        return sorted([s.replace("_", " ").title() for s in students])
+    except FileNotFoundError:
+        return []
+
+def get_latest_report_path():
+    """Finds the most recently created attendance report file."""
+    try:
+        report_files = [os.path.join(REPORTS_DIR, f) for f in os.listdir(REPORTS_DIR) if f.startswith('Attendance_Report') and f.endswith('.xlsx')]
+        if not report_files:
+            return None
+        return max(report_files, key=os.path.getctime)
+    except FileNotFoundError:
+        return None
+
+# 4. API Endpoints
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    try:
+        data = request.get_json()
+        images = data.get('images')
+        if not images: return jsonify({'message': 'No images received.'}), 400
+
+        saved_files = []
+        for index, base64_image in enumerate(images):
+            try:
+                header, encoded_data = base64_image.split(',', 1)
+                image_data = base64.b64decode(encoded_data)
+                file_name = f'capture-{int(time.time())}-{index}.png'
+                file_path = os.path.join(UPLOADS_DIR, file_name)
+                with open(file_path, 'wb') as f: f.write(image_data)
+                saved_files.append(file_name)
+            except Exception: continue
+
+        all_known_students = get_known_students(DATABASE_DIR)
+        attendance_status = {student: 'Absent' for student in all_known_students}
+
+        for file_name in saved_files:
+            image_path = os.path.join(UPLOADS_DIR, file_name)
+            try:
+                img = Image.open(image_path)
+                if img.width > 640:
+                    w_percent = (640 / float(img.width))
+                    h_size = int((float(img.height) * float(w_percent)))
+                    img = img.resize((640, h_size), Image.Resampling.LANCZOS)
+                    img.save(image_path)
+                
+                dfs = DeepFace.find(img_path=image_path, db_path=DATABASE_DIR, model_name='ArcFace', enforce_detection=False, detector_backend='yunet')
+                if dfs and not dfs[0].empty:
+                    for _, row in dfs[0].iterrows():
+                        identity_path = row['identity']
+                        person_name = os.path.basename(os.path.dirname(identity_path)).replace("_", " ").title()
+                        if person_name in attendance_status:
+                            attendance_status[person_name] = 'Present'
+            except Exception as e:
+                print(f"Recognition error for {file_name}: {e}")
+
+        current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        report_data = [{'Timestamp': current_timestamp, 'Name': name, 'Status': status} for name, status in attendance_status.items()]
         
-        .modal-video-container {
-            position: relative; width: 100%; padding-top: 75%; /* 4:3 Aspect Ratio */
-            background: #000; border-radius: 8px; overflow: hidden;
-        }
-        #webcam, #output_canvas {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            /* FIXED: Prevents stretching/distortion of the camera view */
-            object-fit: cover;
-        }
-        #webcam { transform: scaleX(-1); }
-        .modal-capture-btn {
-            background-color: white; border: 4px solid var(--primary-color);
-            border-radius: 50%; width: 64px; height: 64px; cursor: pointer;
-            display: block; margin: 1.5rem auto 0.5rem; transition: transform 0.2s ease-in-out;
-        }
-        .modal-capture-btn:hover { transform: scale(1.1); }
-        .camera-modal-content { max-width: 680px; }
-        
-        .late-modal-content, .report-modal-content { max-width: 600px; }
-        .modal-content h3 {
-            margin-top: 0; text-align: center; font-size: 1.25rem;
-            border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;
-        }
-        .checkbox-list, .report-content {
-            max-height: 50vh; overflow-y: auto; padding-right: 1rem;
-        }
-        .checkbox-item { display: flex; align-items: center; cursor: pointer; gap: 0.75rem; }
-        .checkbox-item input { accent-color: var(--primary-color); }
-        .report-tabs {
-            display: flex;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 1rem;
-        }
-        .tab-btn {
-            padding: 0.75rem 1.25rem; cursor: pointer; border: none;
-            background-color: transparent; font-family: 'Poppins', sans-serif;
-            font-weight: 500; font-size: 1rem; color: var(--text-light);
-            border-bottom: 3px solid transparent;
-        }
-        .tab-btn.active {
-            color: var(--primary-color);
-            border-bottom: 3px solid var(--primary-color);
-        }
-        .report-table {
-            width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem;
-        }
-        .report-table th, .report-table td {
-            padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--border-color);
-        }
-        .report-table th { font-weight: 600; }
-        .report-table td.present { color: #16a34a; font-weight: 500; }
-        .report-table td.absent { color: #dc2626; font-weight: 500; }
-        .report-table td.late-arrival { color: #f59e0b; font-weight: 500; }
-        
-        .photo-gallery {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 1rem; width: 100%;
-        }
-        .photo-gallery img {
-            width: 100%;
-            aspect-ratio: 4 / 3;
-            border: 3px solid var(--border-color);
-            border-radius: 8px; object-fit: cover; box-shadow: var(--shadow);
-            transition: all 0.2s ease-in-out;
-        }
-        .photo-gallery img:hover { transform: scale(1.05); border-color: var(--primary-color); }
-        .status {
-            margin-top: 0; font-size: 1rem; font-weight: 500; min-height: 24px;
-            padding: 0.5rem 1rem; border-radius: 8px;
-        }
-        .status.success { background-color: #dcfce7; color: #166534; }
-        .status.error { background-color: #fee2e2; color: #991b1b; }
-        .status.info { background-color: #e0f2fe; color: #075985; }
-        .modal-footer {
-            margin-top: 1.5rem; padding-top: 1rem;
-            border-top: 1px solid var(--border-color); text-align: right;
-        }
-        
-        @media (min-width: 640px) {
-            .brand { font-size: 1.5rem; }
-            .nav a { font-size: 1rem; padding: 0.5rem 1rem; margin-left: 0.5rem; }
-            .btn { font-size: 1rem; width: auto; }
-            .capture-card h2 { font-size: 1.75rem; }
-            .camera-icon { width: 72px; height: 72px; }
-        }
-    </style>
-</head>
-<body>
-    
-    <header class="header"></header>
+        if not report_data: return jsonify({'message': 'No known students in the database to generate a report.'}), 400
 
-    <main class="main-content"></main>
-
-    <div id="cameraModal" class="modal-overlay"></div>
-    <div id="lateModal" class="modal-overlay"></div>
-    <div id="reportModal" class="modal-overlay"></div>
-
-    <script>
-        const openCameraModalBtn=document.getElementById("openCameraModalBtn"),closeCameraModalBtn=document.getElementById("closeCameraModalBtn"),cameraModal=document.getElementById("cameraModal"),openLateModalBtn=document.getElementById("openLateModalBtn"),closeLateModalBtn=document.getElementById("closeLateModalBtn"),lateModal=document.getElementById("lateModal"),studentListNav=document.getElementById("studentListNav"),reportModal=document.getElementById("reportModal"),closeReportModalBtn=document.getElementById("closeReportModalBtn"),reportContent=document.getElementById("reportContent"),modalCaptureBtn=document.getElementById("modalCaptureBtn"),videoElement=document.getElementById("webcam"),canvasElement=document.getElementById("output_canvas"),canvasCtx=canvasElement.getContext("2d"),uploadBtn=document.getElementById("uploadBtn"),photoGallery=document.getElementById("photoGallery"),statusEl=document.getElementById("status"),lateStudentChecklist=document.getElementById("lateStudentChecklist"),submitLateBtn=document.getElementById("submitLateBtn"),tabAll=document.getElementById("tabAll"),tabLate=document.getElementById("tabLate");
-        const SERVER_URL = 'https://nonpapistical-nonembellishing-bev.ngrok-free.dev';
-        let camera=null,currentReportData=[];const studentList=["Student A","Student B","Student C","Chris Evans","Elon Musk","Emma Watson","John Doe","Jane Smith"];function populateLateCheckboxes(){lateStudentChecklist.innerHTML="",studentList.forEach(e=>{const t=document.createElement("div");t.className="checkbox-item",t.innerHTML=`<input type="checkbox" id="student-${e.replace(/\s+/g,"-")}"><label for="student-${e.replace(/\s+/g,"-")}">${e}</label>`,lateStudentChecklist.appendChild(t)})}document.addEventListener("DOMContentLoaded",populateLateCheckboxes);function openCameraModal(){cameraModal.classList.add("show"),startCamera()}function closeCameraModal(){cameraModal.classList.remove("show"),stopCamera()}function openLateModal(){lateModal.classList.add("show")}function closeLateModal(){lateModal.classList.remove("show")}function openReportModal(){reportModal.classList.add("show")}function closeReportModal(){reportModal.classList.remove("show")}async function fetchAndDisplayReport(){reportContent.innerHTML="<p>Loading report...</p>",openReportModal();try{const e=await fetch(`${SERVER_URL}/get-latest-report`);if(!e.ok)throw new Error("Failed to fetch report.");currentReportData=await e.json(),renderReportTable("all"),tabAll.classList.add("active"),tabLate.classList.remove("active")}catch(e){reportContent.innerHTML=`<p style="color: #dc2626;">Error: ${e.message}</p>`}}function renderReportTable(e){let t=currentReportData;"late"===(e)&&(t=currentReportData.filter(e=>"Late Arrival"===e.Status));if(0===t.length)return void(reportContent.innerHTML="<p>No students found for this filter.</p>");const o=document.createElement("table");o.className="report-table",o.innerHTML="<thead><tr><th>Timestamp</th><th>Name</th><th>Status</th></tr></thead>";const n=document.createElement("tbody");t.forEach(e=>{const t=document.createElement("tr"),o=e.Status||"N/A",a=o.toLowerCase().replace(/\s+/g,"-");t.innerHTML=`<td>${e.Timestamp||"N/A"}</td><td>${e.Name||"N/A"}</td><td class="${a}">${o}</td>`,n.appendChild(t)}),o.appendChild(n),reportContent.innerHTML="",reportContent.appendChild(o)}
+        df = pd.DataFrame(report_data)
+        report_filename = f'Attendance_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        report_path = os.path.join(REPORTS_DIR, report_filename)
+        df.to_excel(report_path, index=False)
         
-        // --- UPDATED: Mobile-friendly camera start function ---
-        function startCamera() {
-            // Use flexible constraints to avoid the "string pattern" error and help select the rear camera
-            const constraints = {
-                video: {
-                    facingMode: 'environment', // Prefer the rear camera
-                    width: { ideal: 1280 },   // Ask for a preferred width
-                    height: { ideal: 720 }     // Ask for a preferred height
-                }
-            };
-            
-            camera = new Camera(videoElement, {
-                onFrame: async () => {
-                    // Make sure the canvas size matches the video stream size to prevent stretching in MediaPipe
-                    if (videoElement.videoWidth > 0 && (canvasElement.width !== videoElement.videoWidth || canvasElement.height !== videoElement.videoHeight)) {
-                        canvasElement.width = videoElement.videoWidth;
-                        canvasElement.height = videoElement.videoHeight;
-                    }
-                    await faceDetection.send({ image: videoElement });
-                },
-                constraints: constraints // Pass the flexible constraints
-            });
-            camera.start();
-        }
+        return jsonify({'message': f'Report saved as {report_filename}'}), 200
 
-        function stopCamera(){camera&&(camera.stop(),camera=null)}const faceDetection=new FaceDetection({locateFile:e=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${e}`});faceDetection.setOptions({model:"short",minDetectionConfidence:.5});function onResults(e){canvasCtx.clearRect(0,0,canvasElement.width,canvasElement.height),canvasCtx.drawImage(e.image,0,0,canvasElement.width,canvasElement.height),e.detections&&e.detections.forEach(e=>{drawRectangle(canvasCtx,e.boundingBox,{color:"#4f46e5",lineWidth:4,fillColor:"#00000000"})})}faceDetection.onResults(onResults);
-        
-        // --- UPDATED: Capture function to respect video's true aspect ratio ---
-        function capturePhoto(){
-            if(!camera || !videoElement.videoWidth) return; // Wait until video is initialized
-            
-            // Set canvas dimensions to the actual video stream dimensions to prevent distortion
-            canvasElement.width = videoElement.videoWidth;
-            canvasElement.height = videoElement.videoHeight;
-            // Draw the current video frame to the canvas
-            canvasCtx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+    except Exception as e:
+        print(f"ERROR in /upload: {e}")
+        return jsonify({'message': f'An unexpected server error occurred: {e}'}), 500
 
-            const imageDataUrl=canvasElement.toDataURL("image/jpeg",.7);
-            const img=document.createElement("img");
-            img.src=imageDataUrl,img.alt="Captured Photo",photoGallery.appendChild(img),uploadBtn.disabled=!1
-        }
+@app.route('/mark-late', methods=['POST'])
+def mark_late():
+    try:
+        data = request.get_json()
+        late_students = data.get('late_students')
+        if not late_students: return jsonify({'message': 'No late students received.'}), 400
+
+        latest_report_path = get_latest_report_path()
+        if not latest_report_path:
+            return jsonify({'message': 'No attendance report found to update. Please run attendance first.'}), 404
+
+        df = pd.read_excel(latest_report_path)
+        for student_name in late_students:
+            df.loc[df['Name'] == student_name, 'Status'] = 'Late Arrival'
+
+        df.to_excel(latest_report_path, index=False)
+        return jsonify({'message': 'Attendance report updated with late arrivals.'}), 200
+
+    except Exception as e:
+        print(f"ERROR in /mark-late: {e}")
+        return jsonify({'message': f'Server error: {e}'}), 500
+
+@app.route('/get-latest-report', methods=['GET'])
+def get_latest_report():
+    try:
+        latest_report_path = get_latest_report_path()
+        if not latest_report_path:
+            return jsonify([]), 200
+
+        df = pd.read_excel(latest_report_path)
+        # Standardize column name just in case old reports exist
+        if 'Status (Present/Absent)' in df.columns:
+            df.rename(columns={'Status (Present/Absent)': 'Status'}, inplace=True)
         
-        async function uploadPhotos(){const e=document.querySelectorAll("#photoGallery img");if(0===e.length)return statusEl.textContent="No photos to upload.",void(statusEl.className="status info");statusEl.textContent="Uploading & Processing...",statusEl.className="status info",uploadBtn.disabled=!0;const t=Array.from(e).map(e=>e.src);try{const e=await fetch(`${SERVER_URL}/upload`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:t})});if(!e.ok)throw new Error(`Server error: ${e.statusText}`);const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success"}catch(e){console.error("Upload failed:",e),statusEl.textContent=`❌ Upload failed. See console for details.`,statusEl.className="status error"}finally{uploadBtn.disabled=!1}}async function submitLateArrivals(){const e=document.querySelectorAll('#lateStudentChecklist input[type="checkbox"]:checked');if(0===e.length)return void alert("Please select at least one student.");const t=Array.from(e).map(e=>e.parentElement.querySelector("label").textContent);submitLateBtn.disabled=!0,submitLateBtn.textContent="Submitting...";try{const e=await fetch(`${SERVER_URL}/mark-late`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({late_students:t})});if(!e.ok)throw new Error("Server failed to process the request.");const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success",closeLateModal()}catch(e){console.error("Failed to submit late arrivals:",e),statusEl.textContent=`❌ Failed to submit late arrivals.`,statusEl.className="status error"}finally{submitLateBtn.disabled=!1,submitLateBtn.textContent="Submit"}}openCameraModalBtn.addEventListener("click",openCameraModal),closeCameraModalBtn.addEventListener("click",closeCameraModal),openLateModalBtn.addEventListener("click",openLateModal),closeLateModalBtn.addEventListener("click",closeLateModal),studentListNav.addEventListener("click",fetchAndDisplayReport),closeReportModalBtn.addEventListener("click",closeReportModal),modalCaptureBtn.addEventListener("click",capturePhoto),uploadBtn.addEventListener("click",uploadPhotos),submitLateBtn.addEventListener("click",submitLateArrivals),tabAll.addEventListener("click",()=>{renderReportTable("all"),tabAll.classList.add("active"),tabLate.classList.remove("active")}),tabLate.addEventListener("click",()=>{renderReportTable("late"),tabLate.classList.add("active"),tabAll.classList.remove("active")});
-    </script>
-</body>
-</html>
+        return jsonify(df.to_dict(orient='records')), 200
+
+    except Exception as e:
+        print(f"ERROR in /get-latest-report: {e}")
+        return jsonify({'message': f'Error fetching report: {e}'}), 500
+
+# 5. Run the Flask App
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
