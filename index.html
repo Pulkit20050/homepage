@@ -32,6 +32,7 @@
             font-family: 'Poppins', sans-serif; margin: 0; background-color: var(--bg-light);
             color: var(--text-dark); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
         }
+
         .header {
             background-color: var(--bg-white); padding: 1rem 1.5rem;
             display: flex; justify-content: space-between; align-items: center;
@@ -41,10 +42,11 @@
         .nav a {
             color: var(--text-light); text-decoration: none; padding: 0.5rem 0.75rem;
             margin-left: 0.25rem; border-radius: 6px; font-weight: 500; transition: all 0.2s ease-in-out;
-            cursor: pointer;
+            cursor: pointer; font-size: 0.9rem;
         }
         .nav a.active { background-color: var(--primary-color); color: white; }
         .nav a:not(.active):hover { color: var(--primary-color); }
+
         .main-content {
             padding: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem;
         }
@@ -60,6 +62,7 @@
         .camera-icon-container { cursor: pointer; margin-bottom: 2rem; transition: transform 0.2s ease-in-out; }
         .camera-icon-container:hover { transform: scale(1.1); }
         .camera-icon { width: 64px; height: 64px; color: var(--primary-color); }
+
         .action-buttons {
             display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;
         }
@@ -78,6 +81,7 @@
         .btn:disabled {
             background-color: #d1d5db; color: #9ca3af; cursor: not-allowed; transform: none;
         }
+
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0, 0, 0, 0.5); display: none;
@@ -95,15 +99,16 @@
             position: absolute; top: 10px; right: 10px; background-color: var(--bg-light);
             color: var(--text-light); border: none; border-radius: 50%; width: 32px; height: 32px;
             font-size: 1.5rem; cursor: pointer; display: flex;
-            justify-content: center; align-items: center; transition: all 0.2s ease-in-out;
+            justify-content: center; align-items: center; transition: all 0.2s ease-in-out; z-index: 10;
         }
         .modal-close-btn:hover { background-color: var(--border-color); color: var(--text-dark); }
+        
         .modal-video-container {
             position: relative; width: 100%; padding-top: 75%;
             background: #000; border-radius: 8px; overflow: hidden;
         }
         #webcam, #output_canvas {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
         }
         #webcam { transform: scaleX(-1); }
         .modal-capture-btn {
@@ -113,9 +118,10 @@
         }
         .modal-capture-btn:hover { transform: scale(1.1); }
         .camera-modal-content { max-width: 680px; }
+        
         .late-modal-content, .report-modal-content { max-width: 600px; }
         .modal-content h3 {
-            margin-top: 0; text-align: center;
+            margin-top: 0; text-align: center; font-size: 1.25rem;
             border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;
         }
         .checkbox-list, .report-content {
@@ -133,12 +139,15 @@
         .report-table td.present { color: #16a34a; font-weight: 500; }
         .report-table td.absent { color: #dc2626; font-weight: 500; }
         .report-table td.late-arrival { color: #f59e0b; font-weight: 500; }
+        
         .photo-gallery {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
             gap: 1rem; width: 100%;
         }
         .photo-gallery img {
-            width: 100%; height: 90px; border: 3px solid var(--border-color);
+            width: 100%;
+            aspect-ratio: 4 / 3; /* FIXED: Prevents image distortion */
+            border: 3px solid var(--border-color);
             border-radius: 8px; object-fit: cover; box-shadow: var(--shadow);
             transition: all 0.2s ease-in-out;
         }
@@ -154,11 +163,14 @@
             margin-top: 1.5rem; padding-top: 1rem;
             border-top: 1px solid var(--border-color); text-align: right;
         }
+        
+        /* Desktop styles */
         @media (min-width: 640px) {
             .brand { font-size: 1.5rem; }
-            .nav a { padding: 0.5rem 1rem; margin-left: 0.5rem; }
+            .nav a { font-size: 1rem; padding: 0.5rem 1rem; margin-left: 0.5rem; }
             .btn { font-size: 1rem; width: auto; }
             .capture-card h2 { font-size: 1.75rem; }
+            .camera-icon { width: 72px; height: 72px; }
         }
     </style>
 </head>
@@ -201,9 +213,11 @@
 
     <script>
         const openCameraModalBtn=document.getElementById("openCameraModalBtn"),closeCameraModalBtn=document.getElementById("closeCameraModalBtn"),cameraModal=document.getElementById("cameraModal"),openLateModalBtn=document.getElementById("openLateModalBtn"),closeLateModalBtn=document.getElementById("closeLateModalBtn"),lateModal=document.getElementById("lateModal"),studentListNav=document.getElementById("studentListNav"),reportModal=document.getElementById("reportModal"),closeReportModalBtn=document.getElementById("closeReportModalBtn"),reportContent=document.getElementById("reportContent"),modalCaptureBtn=document.getElementById("modalCaptureBtn"),videoElement=document.getElementById("webcam"),canvasElement=document.getElementById("output_canvas"),canvasCtx=canvasElement.getContext("2d"),uploadBtn=document.getElementById("uploadBtn"),photoGallery=document.getElementById("photoGallery"),statusEl=document.getElementById("status"),lateStudentChecklist=document.getElementById("lateStudentChecklist"),submitLateBtn=document.getElementById("submitLateBtn");
+        
+        // UPDATED: Replaced localhost with your ngrok URL
         const SERVER_URL = 'https://nonpapistical-nonembellishing-bev.ngrok-free.dev';
-        let camera=null;const studentList=["Student A","Student B","Student C","Chris Evans","Elon Musk","Emma Watson","John Doe","Jane Smith"];function populateLateCheckboxes(){lateStudentChecklist.innerHTML="",studentList.forEach(e=>{const t=document.createElement("div");t.className="checkbox-item",t.innerHTML=`<input type="checkbox" id="student-${e.replace(/\s+/g,"-")}"><label for="student-${e.replace(/\s+/g,"-")}">${e}</label>`,lateStudentChecklist.appendChild(t)})}document.addEventListener("DOMContentLoaded",populateLateCheckboxes);function openCameraModal(){cameraModal.classList.add("show"),startCamera()}function closeCameraModal(){cameraModal.classList.remove("show"),stopCamera()}function openLateModal(){lateModal.classList.add("show")}function closeLateModal(){lateModal.classList.remove("show")}function openReportModal(){reportModal.classList.add("show")}function closeReportModal(){reportModal.classList.remove("show")}async function fetchAndDisplayReport(){reportContent.innerHTML="<p>Loading report...</p>",openReportModal();try{const e=await fetch(`${SERVER_URL}/get-latest-report`);if(!e.ok){const t=await e.json();throw new Error(t.message||"Failed to fetch report.")}const t=await e.json();if(0===t.length)return void(reportContent.innerHTML="<p>No attendance data found in the latest report.</p>");const o=document.createElement("table");o.className="report-table";const n=document.createElement("thead");n.innerHTML="<tr><th>Timestamp</th><th>Name</th><th>Status</th></tr>",o.appendChild(n);const a=document.createElement("tbody");t.forEach(e=>{const t=document.createElement("tr"),o=e["Status (Present/Absent)"]||"N/A",n=o.toLowerCase().replace(" ","-");t.innerHTML=`<td>${e.Timestamp||"N/A"}</td><td>${e.Name||"N/A"}</td><td class="${n}">${o}</td>`,a.appendChild(t)}),o.appendChild(a),reportContent.innerHTML="",reportContent.appendChild(o)}catch(e){reportContent.innerHTML=`<p style="color: #dc2626;">Error: ${e.message}</p>`,console.error("Failed to fetch report:",e)}}function startCamera(){const e={video:{facingMode:"environment"}};camera=new Camera(videoElement,{onFrame:async()=>{await faceDetection.send({image:videoElement})},width:640,height:480,constraints:e}),camera.start()}function stopCamera(){camera&&(camera.stop(),camera=null)}const faceDetection=new FaceDetection({locateFile:e=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${e}`});faceDetection.setOptions({model:"short",minDetectionConfidence:.5});function onResults(e){canvasCtx.clearRect(0,0,canvasElement.width,canvasElement.height),canvasCtx.drawImage(e.image,0,0,canvasElement.width,canvasElement.height),e.detections&&e.detections.forEach(e=>{drawRectangle(canvasCtx,e.boundingBox,{color:"#4f46e5",lineWidth:4,fillColor:"#00000000"})})}faceDetection.onResults(onResults);function capturePhoto(){if(!camera)return;const e=canvasElement.toDataURL("image/jpeg",.7),t=document.createElement("img");t.src=e,t.alt="Captured Photo",photoGallery.appendChild(t),uploadBtn.disabled=!1}async function uploadPhotos(){const e=document.querySelectorAll("#photoGallery img");if(0===e.length)return statusEl.textContent="No photos to upload.",void(statusEl.className="status info");statusEl.textContent="Uploading & Processing...",statusEl.className="status info",uploadBtn.disabled=!0;const t=Array.from(e).map(e=>e.src);try{const e=await fetch(`${SERVER_URL}/upload`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:t})});if(!e.ok)throw new Error(`Server error: ${e.statusText}`);const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success"}catch(e){console.error("Upload failed:",e),statusEl.textContent=`❌ Upload failed. See console for details.`,statusEl.className="status error"}finally{uploadBtn.disabled=!1}}async function submitLateArrivals(){const e=document.querySelectorAll('#lateStudentChecklist input[type="checkbox"]:checked');if(0===e.length)return void alert("Please select at least one student.");const t=Array.from(e).map(e=>e.parentElement.querySelector("label").textContent);submitLateBtn.disabled=!0,submitLateBtn.textContent="Submitting...";try{const e=await fetch(`${SERVER_URL}/mark-late`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({late_students:t})});if(!e.ok)throw new Error("Server failed to process the request.");const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success",closeLateModal()}catch(e){console.error("Failed to submit late arrivals:",e),statusEl.textContent="❌ Failed to submit late arrivals.",statusEl.className="status error"}finally{submitLateBtn.disabled=!1,submitLateBtn.textContent="Submit"}}openCameraModalBtn.addEventListener("click",openCameraModal),closeCameraModalBtn.addEventListener("click",closeCameraModal),openLateModalBtn.addEventListener("click",openLateModal),closeLateModalBtn.addEventListener("click",closeLateModal),studentListNav.addEventListener("click",fetchAndDisplayReport),closeReportModalBtn.addEventListener("click",closeReportModal),modalCaptureBtn.addEventListener("click",capturePhoto),uploadBtn.addEventListener("click",uploadPhotos),submitLateBtn.addEventListener("click",submitLateArrivals);
+        
+        let camera=null;const studentList=["Student A","Student B","Student C","Chris Evans","Elon Musk","Emma Watson","John Doe","Jane Smith"];function populateLateCheckboxes(){lateStudentChecklist.innerHTML="",studentList.forEach(e=>{const t=document.createElement("div");t.className="checkbox-item",t.innerHTML=`<input type="checkbox" id="student-${e.replace(/\s+/g,"-")}"><label for="student-${e.replace(/\s+/g,"-")}">${e}</label>`,lateStudentChecklist.appendChild(t)})}document.addEventListener("DOMContentLoaded",populateLateCheckboxes);function openCameraModal(){cameraModal.classList.add("show"),startCamera()}function closeCameraModal(){cameraModal.classList.remove("show"),stopCamera()}function openLateModal(){lateModal.classList.add("show")}function closeLateModal(){lateModal.classList.remove("show")}function openReportModal(){reportModal.classList.add("show")}function closeReportModal(){reportModal.classList.remove("show")}async function fetchAndDisplayReport(){reportContent.innerHTML="<p>Loading report...</p>",openReportModal();try{const e=await fetch(`${SERVER_URL}/get-latest-report`);if(!e.ok){const t=await e.json();throw new Error(t.message||"Failed to fetch report.")}const t=await e.json();if(0===t.length)return void(reportContent.innerHTML="<p>No attendance data found in the latest report.</p>");const o=document.createElement("table");o.className="report-table";const n=document.createElement("thead");n.innerHTML="<tr><th>Timestamp</th><th>Name</th><th>Status</th></tr>",o.appendChild(n);const a=document.createElement("tbody");t.forEach(e=>{const t=document.createElement("tr"),o=e["Status (Present/Absent)"]||"N/A",n=o.toLowerCase().replace(" ","-");t.innerHTML=`<td>${e.Timestamp||"N/A"}</td><td>${e.Name||"N/A"}</td><td class="${n}">${o}</td>`,a.appendChild(t)}),o.appendChild(a),reportContent.innerHTML="",reportContent.appendChild(o)}catch(e){reportContent.innerHTML=`<p style="color: #dc2626;">Error: ${e.message}</p>`,console.error("Failed to fetch report:",e)}}function startCamera(){const e={video:{facingMode:"environment"}};camera=new Camera(videoElement,{onFrame:async()=>{await faceDetection.send({image:videoElement})},width:640,height:480,constraints:e}),camera.start()}function stopCamera(){camera&&(camera.stop(),camera=null)}const faceDetection=new FaceDetection({locateFile:e=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${e}`});faceDetection.setOptions({model:"short",minDetectionConfidence:.5});function onResults(e){canvasCtx.clearRect(0,0,canvasElement.width,canvasElement.height),canvasCtx.drawImage(e.image,0,0,canvasElement.width,canvasElement.height),e.detections&&e.detections.forEach(e=>{drawRectangle(canvasCtx,e.boundingBox,{color:"#4f46e5",lineWidth:4,fillColor:"#00000000"})})}faceDetection.onResults(onResults);function capturePhoto(){if(!camera)return;const e=canvasElement.toDataURL("image/jpeg",.7),t=document.createElement("img");t.src=e,t.alt="Captured Photo",photoGallery.appendChild(t),uploadBtn.disabled=!1}async function uploadPhotos(){const e=document.querySelectorAll("#photoGallery img");if(0===e.length)return statusEl.textContent="No photos to upload.",void(statusEl.className="status info");statusEl.textContent="Uploading & Processing...",statusEl.className="status info",uploadBtn.disabled=!0;const t=Array.from(e).map(e=>e.src);try{const e=await fetch(`${SERVER_URL}/upload`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({images:t})});if(!e.ok)throw new Error(`Server error: ${e.statusText}`);const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success"}catch(e){console.error("Upload failed:",e),statusEl.textContent=`❌ Upload failed. See console for details.`,statusEl.className="status error"}finally{uploadBtn.disabled=!1}}async function submitLateArrivals(){const e=document.querySelectorAll('#lateStudentChecklist input[type="checkbox"]:checked');if(0===e.length)return void alert("Please select at least one student.");const t=Array.from(e).map(e=>e.parentElement.querySelector("label").textContent);submitLateBtn.disabled=!0,submitLateBtn.textContent="Submitting...";try{const e=await fetch(`${SERVER_URL}/mark-late`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({late_students:t})});if(!e.ok)throw new Error("Server failed to process the request.");const o=await e.json();statusEl.textContent=`✅ ${o.message}`,statusEl.className="status success",closeLateModal()}catch(e){console.error("Failed to submit late arrivals:",e),statusEl.textContent=`❌ Failed to submit late arrivals.`,statusEl.className="status error"}finally{submitLateBtn.disabled=!1,submitLateBtn.textContent="Submit"}}openCameraModalBtn.addEventListener("click",openCameraModal),closeCameraModalBtn.addEventListener("click",closeCameraModal),openLateModalBtn.addEventListener("click",openLateModal),closeLateModalBtn.addEventListener("click",closeLateModal),studentListNav.addEventListener("click",fetchAndDisplayReport),closeReportModalBtn.addEventListener("click",closeReportModal),modalCaptureBtn.addEventListener("click",capturePhoto),uploadBtn.addEventListener("click",uploadPhotos),submitLateBtn.addEventListener("click",submitLateArrivals);
     </script>
 </body>
 </html>
-
