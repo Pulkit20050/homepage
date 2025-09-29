@@ -1,151 +1,440 @@
-import os
-import base64
-import time
-from datetime import datetime
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from PIL import Image
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Veriface - Attendance Capture (fixed)</title>
 
-# It's good practice to handle potential import errors
-try:
-    from deepface import DeepFace
-    import pandas as pd
-except ImportError:
-    print("ERROR: One or more required Python packages are not installed.")
-    print("Please run: pip install Flask Flask-CORS deepface pandas openpyxl Pillow tf-keras")
-    exit()
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-# 1. Initialize the Flask App and CORS
-app = Flask(__name__)
-CORS(app)
+  <!-- mediapipe libs (kept as you had them) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
 
-# 2. Define and Create Necessary Directories
-BASE_DIR = os.path.dirname(__file__)
-UPLOADS_DIR = os.path.join(BASE_DIR, 'uploads')
-DATABASE_DIR = os.path.join(BASE_DIR, 'database')
-REPORTS_DIR = os.path.join(BASE_DIR, 'reports')
+  <style>
+    :root{
+      --primary-color:#4f46e5; --primary-hover:#4338ca;
+      --secondary-color:#64748b; --secondary-hover:#475569;
+      --bg-light:#f8fafc; --bg-white:#ffffff; --border-color:#e2e8f0;
+      --text-dark:#1e293b; --text-light:#64748b;
+      --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -0.08 rgba(0,0,0,0.1);
+    }
+    *{box-sizing:border-box}
+    body{font-family:'Poppins',sans-serif;margin:0;background:var(--bg-light);color:var(--text-dark)}
+    .header{background:var(--bg-white);padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color)}
+    .brand{font-size:1.25rem;font-weight:700;color:var(--primary-color)}
+    .main-content{padding:1.5rem;display:flex;flex-direction:column;align-items:center;gap:1.5rem}
+    .capture-card{background:var(--bg-white);border-radius:12px;box-shadow:var(--shadow);padding:2rem;text-align:center;width:100%;max-width:700px}
+    .camera-icon-container{cursor:pointer;margin-bottom:2rem;transition:transform .2s}
+    .camera-icon-container:hover{transform:scale(1.05)}
+    .camera-icon{width:64px;height:64px;color:var(--primary-color)}
+    .action-buttons{display:flex;justify-content:center;gap:1rem;flex-wrap:wrap}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.75rem 1.25rem;border-radius:8px;border:none;font-weight:500;cursor:pointer;width:100%;max-width:220px}
+    .btn-primary{background:var(--primary-color);color:#fff}
+    .btn-secondary{background:var(--secondary-color);color:#fff}
+    .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);display:none;justify-content:center;align-items:center;z-index:1000;padding:1rem;opacity:0;transition:opacity .25s}
+    .modal-overlay.show{display:flex;opacity:1}
+    .modal-content{position:relative;background:var(--bg-white);padding:1.5rem;border-radius:12px;width:100%;transform:scale(.98);transition:transform .2s}
+    .modal-overlay.show .modal-content{transform:scale(1)}
+    .modal-close-btn{position:absolute;top:10px;right:10px;background:var(--bg-light);border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .modal-video-container{position:relative;width:100%;padding-top:75%;background:#000;border-radius:8px;overflow:hidden}
+    #webcam,#output_canvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+    /* ---- removed mirror transform: no scaleX(-1) ---- */
+    .modal-capture-btn{background:#fff;border:4px solid var(--primary-color);border-radius:50%;width:64px;height:64px;display:block;margin:1.5rem auto 0.5rem;cursor:pointer}
+    .photo-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:1rem;width:100%}
+    .photo-gallery img{width:100%;aspect-ratio:4/3;border-radius:8px;object-fit:cover;border:3px solid var(--border-color)}
+    .status{min-height:24px;padding:.5rem 1rem;border-radius:8px;font-weight:500}
+    .status.success{background:#dcfce7;color:#166534}
+    .status.error{background:#fee2e2;color:#991b1b}
+    .status.info{background:#e0f2fe;color:#075985}
+    .checkbox-item{display:flex;align-items:center;gap:.75rem;margin:.35rem 0}
+    .modal-footer{margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border-color);text-align:right}
+  </style>
+</head>
+<body>
+  <header class="header"><div class="brand">Veriface</div></header>
 
-os.makedirs(UPLOADS_DIR, exist_ok=True)
-os.makedirs(DATABASE_DIR, exist_ok=True)
-os.makedirs(REPORTS_DIR, exist_ok=True)
+  <main class="main-content">
+    <div class="capture-card">
+      <h2>Capture Attendance</h2>
+      <p>Click the camera to start a session. You can capture multiple photos of the class.</p>
 
-# 3. Helper Functions
-def get_known_students(db_path):
-    """Gets a clean, sorted list of student names from the database subdirectories."""
-    try:
-        students = [d for d in os.listdir(db_path) if os.path.isdir(os.path.join(db_path, d))]
-        return sorted([s.replace("_", " ").title() for s in students])
-    except FileNotFoundError:
-        return []
+      <div id="openCameraModalBtn" class="camera-icon-container" title="Open camera">
+        <svg class="camera-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.776 48.776 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+      </div>
 
-def get_latest_report_path():
-    """Finds the most recently created attendance report file."""
-    try:
-        report_files = [os.path.join(REPORTS_DIR, f) for f in os.listdir(REPORTS_DIR) if f.startswith('Attendance_Report') and f.endswith('.xlsx')]
-        if not report_files:
-            return None
-        return max(report_files, key=os.path.getctime)
-    except FileNotFoundError:
-        return None
+      <div class="action-buttons">
+        <button id="openLateModalBtn" class="btn btn-secondary">Mark Late Arrivals</button>
+        <button id="uploadBtn" class="btn btn-primary" disabled>Upload Attendance</button>
+      </div>
+    </div>
 
-# 4. API Endpoints
-@app.route('/upload', methods=['POST'])
-def upload_files():
-    try:
-        data = request.get_json()
-        images = data.get('images')
-        if not images: return jsonify({'message': 'No images received.'}), 400
+    <p id="status" class="status"></p>
+    <div id="photoGallery" class="photo-gallery" aria-live="polite"></div>
+  </main>
 
-        saved_files = []
-        for index, base64_image in enumerate(images):
-            try:
-                header, encoded_data = base64_image.split(',', 1)
-                image_data = base64.b64decode(encoded_data)
-                file_name = f'capture-{int(time.time())}-{index}.png'
-                file_path = os.path.join(UPLOADS_DIR, file_name)
-                with open(file_path, 'wb') as f: f.write(image_data)
-                saved_files.append(file_name)
-            except Exception: continue
+  <!-- Camera modal -->
+  <div id="cameraModal" class="modal-overlay">
+    <div class="modal-content">
+      <button id="closeCameraModalBtn" class="modal-close-btn">&times;</button>
+      <div class="modal-video-container" id="modalVideoContainer">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="output_canvas"></canvas>
+      </div>
+      <button id="modalCaptureBtn" class="modal-capture-btn" title="Capture"></button>
+    </div>
+  </div>
 
-        all_known_students = get_known_students(DATABASE_DIR)
-        attendance_status = {student: 'Absent' for student in all_known_students}
+  <!-- Late modal -->
+  <div id="lateModal" class="modal-overlay">
+    <div class="modal-content">
+      <button id="closeLateModalBtn" class="modal-close-btn">&times;</button>
+      <h3>Mark Late Arrivals</h3>
+      <div id="lateStudentChecklist" class="checkbox-list"></div>
+      <div class="modal-footer">
+        <button id="submitLateBtn" class="btn btn-primary">Submit</button>
+      </div>
+    </div>
+  </div>
 
-        for file_name in saved_files:
-            image_path = os.path.join(UPLOADS_DIR, file_name)
-            try:
-                img = Image.open(image_path)
-                if img.width > 640:
-                    w_percent = (640 / float(img.width))
-                    h_size = int((float(img.height) * float(w_percent)))
-                    img = img.resize((640, h_size), Image.Resampling.LANCZOS)
-                    img.save(image_path)
-                
-                dfs = DeepFace.find(img_path=image_path, db_path=DATABASE_DIR, model_name='ArcFace', enforce_detection=False, detector_backend='yunet')
-                if dfs and not dfs[0].empty:
-                    for _, row in dfs[0].iterrows():
-                        identity_path = row['identity']
-                        person_name = os.path.basename(os.path.dirname(identity_path)).replace("_", " ").title()
-                        if person_name in attendance_status:
-                            attendance_status[person_name] = 'Present'
-            except Exception as e:
-                print(f"Recognition error for {file_name}: {e}")
+  <!-- Report modal (kept minimal) -->
+  <div id="reportModal" class="modal-overlay">
+    <div class="modal-content">
+      <button id="closeReportModalBtn" class="modal-close-btn">&times;</button>
+      <h3>Latest Attendance Report</h3>
+      <div id="reportContent" class="report-content"></div>
+    </div>
+  </div>
 
-        current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        report_data = [{'Timestamp': current_timestamp, 'Name': name, 'Status': status} for name, status in attendance_status.items()]
-        
-        if not report_data: return jsonify({'message': 'No known students in the database to generate a report.'}), 400
+  <script>
+    // --- elements
+    const openCameraModalBtn = document.getElementById('openCameraModalBtn');
+    const closeCameraModalBtn = document.getElementById('closeCameraModalBtn');
+    const cameraModal = document.getElementById('cameraModal');
+    const modalVideoContainer = document.getElementById('modalVideoContainer');
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const modalCaptureBtn = document.getElementById('modalCaptureBtn');
 
-        df = pd.DataFrame(report_data)
-        report_filename = f'Attendance_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
-        report_path = os.path.join(REPORTS_DIR, report_filename)
-        df.to_excel(report_path, index=False)
-        
-        return jsonify({'message': f'Report saved as {report_filename}'}), 200
+    const openLateModalBtn = document.getElementById('openLateModalBtn');
+    const closeLateModalBtn = document.getElementById('closeLateModalBtn');
+    const lateModal = document.getElementById('lateModal');
+    const lateStudentChecklist = document.getElementById('lateStudentChecklist');
+    const submitLateBtn = document.getElementById('submitLateBtn');
 
-    except Exception as e:
-        print(f"ERROR in /upload: {e}")
-        return jsonify({'message': f'An unexpected server error occurred: {e}'}), 500
+    const reportModal = document.getElementById('reportModal');
+    const closeReportModalBtn = document.getElementById('closeReportModalBtn');
+    const reportContent = document.getElementById('reportContent');
 
-@app.route('/mark-late', methods=['POST'])
-def mark_late():
-    try:
-        data = request.get_json()
-        late_students = data.get('late_students')
-        if not late_students: return jsonify({'message': 'No late students received.'}), 400
+    const uploadBtn = document.getElementById('uploadBtn');
+    const photoGallery = document.getElementById('photoGallery');
+    const statusEl = document.getElementById('status');
 
-        latest_report_path = get_latest_report_path()
-        if not latest_report_path:
-            return jsonify({'message': 'No attendance report found to update. Please run attendance first.'}), 404
+    const SERVER_URL = 'https://nonpapistical-nonembellishing-bev.ngrok-free.dev'; // your endpoint
 
-        df = pd.read_excel(latest_report_path)
-        for student_name in late_students:
-            df.loc[df['Name'] == student_name, 'Status'] = 'Late Arrival'
+    // state
+    let mediaCamera = null; // will store mediapipe Camera instance OR null
+    let localStream = null;  // MediaStream when using getUserMedia fallback
+    let faceDetection = null;
 
-        df.to_excel(latest_report_path, index=False)
-        return jsonify({'message': 'Attendance report updated with late arrivals.'}), 200
+    // students
+    const studentList = ["Student A","Student B","Student C","Chris Evans","Elon Musk","Emma Watson","John Doe","Jane Smith"];
+    function populateLateCheckboxes() {
+      lateStudentChecklist.innerHTML = '';
+      studentList.forEach(name => {
+        const id = 'student-' + encodeURIComponent(name);
+        const row = document.createElement('div');
+        row.className = 'checkbox-item';
+        row.innerHTML = `<input type="checkbox" id="${id}"><label for="${id}">${name}</label>`;
+        lateStudentChecklist.appendChild(row);
+      });
+    }
+    document.addEventListener('DOMContentLoaded', populateLateCheckboxes);
 
-    except Exception as e:
-        print(f"ERROR in /mark-late: {e}")
-        return jsonify({'message': f'Server error: {e}'}), 500
+    // --- helpers: draw bounding box robustly (handles both normalized xmin/ymin or xCenter style objects)
+    function drawBoundingBox(ctx, box, canvasW, canvasH, style = {}) {
+      ctx.save();
+      ctx.strokeStyle = style.color || '#4f46e5';
+      ctx.lineWidth = style.lineWidth || 3;
 
-@app.route('/get-latest-report', methods=['GET'])
-def get_latest_report():
-    try:
-        latest_report_path = get_latest_report_path()
-        if not latest_report_path:
-            return jsonify([]), 200
+      // supports either {xmin, ymin, width, height} normalized OR {xCenter, yCenter, width, height} (maybe normalized)
+      let x = 0, y = 0, w = 0, h = 0;
 
-        df = pd.read_excel(latest_report_path)
-        # Standardize column name just in case old reports exist
-        if 'Status (Present/Absent)' in df.columns:
-            df.rename(columns={'Status (Present/Absent)': 'Status'}, inplace=True)
-        
-        return jsonify(df.to_dict(orient='records')), 200
+      if (box.xCenter !== undefined && box.yCenter !== undefined && box.width !== undefined && box.height !== undefined) {
+        // normalized center-style OR pixel-style
+        let xc = box.xCenter, yc = box.yCenter, bw = box.width, bh = box.height;
+        if (bw <= 1 && bh <= 1) { // normalized -> scale
+          xc *= canvasW; yc *= canvasH; bw *= canvasW; bh *= canvasH;
+        }
+        x = xc - bw / 2; y = yc - bh / 2; w = bw; h = bh;
+      } else if (box.xmin !== undefined && box.ymin !== undefined && box.width !== undefined && box.height !== undefined) {
+        // normalized xmin style
+        let xmin = box.xmin, ymin = box.ymin, bw = box.width, bh = box.height;
+        if (bw <= 1 && bh <= 1) { xmin *= canvasW; ymin *= canvasH; bw *= canvasW; bh *= canvasH; }
+        x = xmin; y = ymin; w = bw; h = bh;
+      } else {
+        // fallback: try numeric fields
+        return;
+      }
 
-    except Exception as e:
-        print(f"ERROR in /get-latest-report: {e}")
-        return jsonify({'message': f'Error fetching report: {e}'}), 500
+      ctx.strokeRect(x, y, w, h);
+      ctx.restore();
+    }
 
-# 5. Run the Flask App
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    // --- mediapipe faceDetection setup (safe) ---
+    function ensureFaceDetection() {
+      if (faceDetection) return;
+      if (typeof FaceDetection === 'undefined') {
+        console.warn('FaceDetection not loaded');
+        statusEl.textContent = '⚠️ FaceDetection library not loaded — detection unavailable.';
+        statusEl.className = 'status info';
+        return;
+      }
+      faceDetection = new FaceDetection({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
+      });
+      faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.5 });
+      faceDetection.onResults((results) => {
+        // draw the frame (results.image should be the video element)
+        canvasCtx.clearRect(0,0,canvasElement.width,canvasElement.height);
+        try { canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height); }
+        catch (e) {
+          if (videoElement && videoElement.videoWidth) canvasCtx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+        }
+        // draw each detection's bounding box (robust)
+        if (results.detections && results.detections.length) {
+          for (const det of results.detections) {
+            // Mediapipe bounding box shape varies in older/newer APIs; our helper handles both
+            drawBoundingBox(canvasCtx, det.boundingBox || det.locationData?.relativeBoundingBox || {}, canvasElement.width, canvasElement.height, { color: '#4f46e5', lineWidth: 4 });
+          }
+        }
+      });
+    }
+
+    // --- start camera: use mediapipe Camera if available; keep canvas size synced to video size ---
+    async function startCamera() {
+      ensureFaceDetection();
+      // prefer using mediapipe Camera class when present (keeps onFrame integration)
+      try {
+        // construct desired constraints
+        const constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
+
+        if (typeof Camera !== 'undefined') {
+          // use mediapipe Camera wrapper
+          mediaCamera = new Camera(videoElement, {
+            onFrame: async () => {
+              // ensure canvas matches video resolution
+              if (videoElement.videoWidth && (canvasElement.width !== videoElement.videoWidth || canvasElement.height !== videoElement.videoHeight)) {
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+              }
+              if (faceDetection) await faceDetection.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480,
+            // camera_utils supports 'adapted' constraints object as second param under some versions; pass constraints as `constraints`
+            constraints: constraints.video
+          });
+          mediaCamera.start();
+          statusEl.textContent = 'Camera started';
+          statusEl.className = 'status info';
+          return;
+        }
+      } catch (err) {
+        console.warn('mediapipe Camera failed, falling back to getUserMedia', err);
+      }
+
+      // fallback: direct getUserMedia
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+        videoElement.srcObject = localStream;
+        await videoElement.play();
+        // sync canvas size
+        canvasElement.width = videoElement.videoWidth || 640;
+        canvasElement.height = videoElement.videoHeight || 480;
+
+        // create a loop that sends frames to faceDetection (await send to avoid piling)
+        let running = true;
+        (async function frameLoop(){
+          while (running && faceDetection) {
+            try {
+              // keep canvas sized
+              if (videoElement.videoWidth && (canvasElement.width !== videoElement.videoWidth || canvasElement.height !== videoElement.videoHeight)) {
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+              }
+              await faceDetection.send({ image: videoElement });
+            } catch (err) {
+              // ignore single-frame errors
+              // console.warn('frameLoop send error', err);
+            }
+            await new Promise(r => requestAnimationFrame(r));
+          }
+        })();
+        statusEl.textContent = 'Camera started (fallback)';
+        statusEl.className = 'status info';
+      } catch (err) {
+        console.error('getUserMedia failed', err);
+        statusEl.textContent = '❌ Camera error: ' + (err.message || err);
+        statusEl.className = 'status error';
+      }
+    }
+
+    function stopCamera() {
+      // stop mediapipe Camera if used
+      if (mediaCamera) {
+        try { mediaCamera.stop(); } catch(e){}
+        mediaCamera = null;
+      }
+      // stop local stream if used
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+      try { videoElement.pause(); videoElement.srcObject = null; } catch(e){}
+      statusEl.textContent = '';
+    }
+
+    // capture photo (draw current video frame to canvas first for accurate resolution)
+    function capturePhoto() {
+      const vw = videoElement.videoWidth, vh = videoElement.videoHeight;
+      if (!vw || !vh) {
+        statusEl.textContent = 'Camera not ready for capture';
+        statusEl.className = 'status info';
+        return;
+      }
+      canvasElement.width = vw; canvasElement.height = vh;
+      canvasCtx.drawImage(videoElement, 0, 0, vw, vh);
+      const dataUrl = canvasElement.toDataURL('image/jpeg', 0.7);
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.alt = 'Captured Photo';
+      photoGallery.appendChild(img);
+      uploadBtn.disabled = false;
+      statusEl.textContent = 'Captured photo ✔️';
+      statusEl.className = 'status success';
+    }
+
+    // upload (keeps your JSON-based upload, but note it can be large; FormData recommended)
+    async function uploadPhotos() {
+      const imgs = Array.from(document.querySelectorAll('#photoGallery img'));
+      if (imgs.length === 0) {
+        statusEl.textContent = 'No photos to upload.';
+        statusEl.className = 'status info';
+        return;
+      }
+      uploadBtn.disabled = true;
+      statusEl.textContent = 'Uploading & Processing...'; statusEl.className = 'status info';
+      const images = imgs.map(i => i.src);
+      try {
+        const res = await fetch(`${SERVER_URL}/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ images })
+        });
+        if (!res.ok) throw new Error(res.statusText || 'Upload failed');
+        const json = await res.json();
+        statusEl.textContent = '✅ ' + (json.message || 'Upload successful');
+        statusEl.className = 'status success';
+        // optional: clear gallery
+        // photoGallery.innerHTML = '';
+      } catch (err) {
+        console.error('Upload failed', err);
+        statusEl.textContent = '❌ Upload failed. See console.';
+        statusEl.className = 'status error';
+      } finally {
+        uploadBtn.disabled = false;
+      }
+    }
+
+    // Fetch & report + late submit logic (kept largely as you had it)
+    async function fetchAndDisplayReport() {
+      reportContent.innerHTML = '<p>Loading report...</p>';
+      reportModal.classList.add('show');
+      try {
+        const res = await fetch(`${SERVER_URL}/get-latest-report`);
+        if (!res.ok) throw new Error('Failed to fetch report');
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) {
+          reportContent.innerHTML = '<p>No attendance data found.</p>';
+          return;
+        }
+        const table = document.createElement('table');
+        table.className = 'report-table';
+        table.innerHTML = '<thead><tr><th>Timestamp</th><th>Name</th><th>Status</th></tr></thead>';
+        const tbody = document.createElement('tbody');
+        data.forEach(r => {
+          const tr = document.createElement('tr');
+          const statusText = r['Status (Present/Absent)'] || r.Status || 'Unknown';
+          tr.innerHTML = `<td>${r.Timestamp || ''}</td><td>${r.Name || ''}</td><td class="${statusText.toLowerCase().replace(/\s+/g,'-')}">${statusText}</td>`;
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        reportContent.innerHTML = '';
+        reportContent.appendChild(table);
+      } catch (err) {
+        console.error('Failed to fetch report:', err);
+        reportContent.innerHTML = `<p style="color:#dc2626;">Error: ${err.message}</p>`;
+      }
+    }
+
+    async function submitLateArrivals() {
+      const checked = Array.from(lateStudentChecklist.querySelectorAll('input[type="checkbox"]:checked'));
+      if (checked.length === 0) { alert('Please select at least one student.'); return; }
+      const lateStudents = checked.map(cb => cb.parentElement.querySelector('label').textContent);
+      submitLateBtn.disabled = true; submitLateBtn.textContent = 'Submitting...';
+      try {
+        const res = await fetch(`${SERVER_URL}/mark-late`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ late_students: lateStudents })
+        });
+        if (!res.ok) throw new Error('Server failed to process the request.');
+        const json = await res.json();
+        statusEl.textContent = `✅ ${json.message || 'Late arrivals submitted'}`; statusEl.className = 'status success';
+        // clear checkboxes
+        checked.forEach(cb => cb.checked = false);
+        lateModal.classList.remove('show');
+      } catch (err) {
+        console.error('Failed to submit late arrivals:', err);
+        statusEl.textContent = '❌ Failed to submit late arrivals.'; statusEl.className = 'status error';
+      } finally {
+        submitLateBtn.disabled = false; submitLateBtn.textContent = 'Submit';
+      }
+    }
+
+    // --- UI events
+    openCameraModalBtn.addEventListener('click', () => { cameraModal.classList.add('show'); startCamera(); });
+    closeCameraModalBtn.addEventListener('click', () => { cameraModal.classList.remove('show'); stopCamera(); });
+    modalCaptureBtn.addEventListener('click', capturePhoto);
+    uploadBtn.addEventListener('click', uploadPhotos);
+
+    openLateModalBtn.addEventListener('click', () => lateModal.classList.add('show'));
+    closeLateModalBtn.addEventListener('click', () => lateModal.classList.remove('show'));
+    submitLateBtn.addEventListener('click', submitLateArrivals);
+
+    closeReportModalBtn.addEventListener('click', () => reportModal.classList.remove('show'));
+
+    // keyboard escape to close modals
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        cameraModal.classList.remove('show'); stopCamera();
+        lateModal.classList.remove('show'); reportModal.classList.remove('show');
+      }
+    });
+
+    // quick check: if mediapipe FaceDetection didn't load
+    window.addEventListener('load', () => {
+      if (typeof FaceDetection === 'undefined') {
+        console.warn('FaceDetection lib not loaded. Detection will not run.');
+        statusEl.textContent = '⚠️ Mediapipe FaceDetection not loaded; detection disabled.';
+        statusEl.className = 'status info';
+      }
+    });
+
+  </script>
+</body>
+</html>
