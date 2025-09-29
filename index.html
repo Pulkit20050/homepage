@@ -1,329 +1,286 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Veriface - Attendance Capture</title>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
-    
-    <style>
-        :root {
-            --primary-color: #4f46e5;
-            --primary-hover: #4338ca;
-            --secondary-color: #64748b;
-            --secondary-hover: #475569;
-            --bg-light: #f8fafc;
-            --bg-white: #ffffff;
-            --border-color: #e2e8f0;
-            --text-dark: #1e293b;
-            --text-light: #64748b;
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        }
-        *, *::before, *::after { box-sizing: border-box; }
-        body {
-            font-family: 'Poppins', sans-serif; margin: 0; background-color: var(--bg-light);
-            color: var(--text-dark); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-        }
-        .header {
-            background-color: var(--bg-white); padding: 1rem 2rem;
-            display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .brand { font-size: 1.5rem; font-weight: 700; color: var(--primary-color); }
-        .nav a {
-            color: var(--text-light); text-decoration: none; padding: 0.5rem 1rem;
-            margin-left: 0.5rem; border-radius: 6px; font-weight: 500; transition: all 0.2s ease-in-out;
-            cursor: pointer;
-        }
-        .nav a.active { background-color: var(--primary-color); color: white; }
-        .nav a:not(.active):hover { color: var(--primary-color); }
-        .main-content {
-            padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 2rem;
-        }
-        .capture-card {
-            background-color: var(--bg-white); border-radius: 12px; box-shadow: var(--shadow);
-            padding: 2.5rem; text-align: center; width: 100%; max-width: 700px;
-        }
-        .capture-card h2 { margin-top: 0; font-size: 1.75rem; font-weight: 600; }
-        .capture-card p {
-            color: var(--text-light); margin-bottom: 2rem;
-            max-width: 400px; margin-left: auto; margin-right: auto;
-        }
-        .camera-icon-container { cursor: pointer; margin-bottom: 2.5rem; transition: transform 0.2s ease-in-out; }
-        .camera-icon-container:hover { transform: scale(1.1); }
-        .camera-icon { width: 72px; height: 72px; color: var(--primary-color); }
-        .action-buttons {
-            display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;
-        }
-        .btn {
-            display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem;
-            border: none; border-radius: 8px; font-size: 1rem; font-weight: 500;
-            font-family: 'Poppins', sans-serif; cursor: pointer; transition: all 0.2s ease-in-out;
-        }
-        .btn svg { width: 20px; height: 20px; }
-        .btn-primary { background-color: var(--primary-color); color: white; }
-        .btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-2px); }
-        .btn-secondary { background-color: var(--secondary-color); color: white; }
-        .btn-secondary:hover { background-color: var(--secondary-hover); transform: translateY(-2px); }
-        .btn:disabled {
-            background-color: #d1d5db; color: #9ca3af; cursor: not-allowed; transform: none;
-        }
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.5); display: none;
-            justify-content: center; align-items: center; z-index: 1000;
-            opacity: 0; transition: opacity 0.3s ease-in-out;
-        }
-        .modal-overlay.show { display: flex; opacity: 1; }
-        .modal-content {
-            position: relative; background-color: var(--bg-white); padding: 1.5rem;
-            border-radius: 12px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-            width: 90%; transform: scale(0.95); transition: transform 0.3s ease-in-out;
-        }
-        .modal-overlay.show .modal-content { transform: scale(1); }
-        .modal-close-btn {
-            position: absolute; top: 10px; right: 10px; background-color: var(--bg-light);
-            color: var(--text-light); border: none; border-radius: 50%; width: 32px; height: 32px;
-            font-size: 1.5rem; cursor: pointer; display: flex;
-            justify-content: center; align-items: center; transition: all 0.2s ease-in-out;
-        }
-        .modal-close-btn:hover { background-color: var(--border-color); color: var(--text-dark); }
-        .modal-video-container {
-            position: relative; width: 100%; padding-top: 75%;
-            background: #000; border-radius: 8px; overflow: hidden;
-        }
-        #webcam, #output_canvas {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-        }
-        #webcam { transform: scaleX(-1); }
-        .modal-capture-btn {
-            background-color: white; border: 4px solid var(--primary-color);
-            border-radius: 50%; width: 64px; height: 64px; cursor: pointer;
-            display: block; margin: 2rem auto 1rem; transition: transform 0.2s ease-in-out;
-        }
-        .modal-capture-btn:hover { transform: scale(1.1); }
-        .camera-modal-content { max-width: 680px; }
-        .late-modal-content, .report-modal-content { max-width: 600px; }
-        .modal-content h3 {
-            margin-top: 0; text-align: center;
-            border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;
-        }
-        .checkbox-list, .report-content {
-            max-height: 300px; overflow-y: auto; padding-right: 1rem;
-        }
-        .checkbox-item { display: flex; align-items: center; cursor: pointer; gap: 0.75rem; }
-        .checkbox-item input { accent-color: var(--primary-color); }
-        .report-table {
-            width: 100%; border-collapse: collapse; margin-top: 1rem;
-        }
-        .report-table th, .report-table td {
-            padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color);
-        }
-        .report-table th { font-weight: 600; }
-        .report-table td.present { color: #16a34a; }
-        .report-table td.absent { color: #dc2626; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Veriface - Attendance Capture</title>
 
-        .photo-gallery {
-            display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;
-            width: 100%; max-width: 900px;
-        }
-        .photo-gallery img {
-            width: 160px; height: 120px; border: 3px solid var(--border-color);
-            border-radius: 8px; object-fit: cover; box-shadow: var(--shadow);
-            transition: all 0.2s ease-in-out;
-        }
-        .photo-gallery img:hover { transform: scale(1.05); border-color: var(--primary-color); }
-        .status {
-            margin-top: 0; font-size: 1rem; font-weight: 500; min-height: 24px;
-            padding: 0.5rem 1rem; border-radius: 8px;
-        }
-        .status.success { background-color: #dcfce7; color: #166534; }
-        .status.error { background-color: #fee2e2; color: #991b1b; }
-        .status.info { background-color: #e0f2fe; color: #075985; }
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    </style>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
+
+  <style>
+    :root {
+      --primary-color: #4f46e5;
+      --primary-hover: #4338ca;
+      --secondary-color: #64748b;
+      --secondary-hover: #475569;
+      --bg-light: #f8fafc;
+      --bg-white: #ffffff;
+      --border-color: #e2e8f0;
+      --text-dark: #1e293b;
+      --text-light: #64748b;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    }
+    body { font-family: 'Poppins', sans-serif; margin: 0; background-color: var(--bg-light); color: var(--text-dark); }
+    .header { background: var(--bg-white); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
+    .brand { font-size: 1.5rem; font-weight: 700; color: var(--primary-color); }
+    .nav a { color: var(--text-light); text-decoration: none; padding: 0.5rem 1rem; margin-left: 0.5rem; border-radius: 6px; font-weight: 500; cursor: pointer; }
+    .nav a.active { background: var(--primary-color); color: white; }
+    .nav a:not(.active):hover { color: var(--primary-color); }
+    .main-content { padding: 2rem; display: flex; flex-direction: column; align-items: center; gap: 2rem; }
+    .capture-card { background: var(--bg-white); border-radius: 12px; box-shadow: var(--shadow); padding: 2.5rem; text-align: center; width: 100%; max-width: 700px; }
+    .capture-card h2 { margin-top: 0; font-size: 1.75rem; font-weight: 600; }
+    .capture-card p { color: var(--text-light); margin-bottom: 2rem; max-width: 400px; margin-left: auto; margin-right: auto; }
+    .camera-icon-container { cursor: pointer; margin-bottom: 2.5rem; transition: transform 0.2s; }
+    .camera-icon-container:hover { transform: scale(1.1); }
+    .camera-icon { width: 72px; height: 72px; color: var(--primary-color); }
+    .action-buttons { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 500; cursor: pointer; }
+    .btn svg { width: 20px; height: 20px; }
+    .btn-primary { background: var(--primary-color); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-2px); }
+    .btn-secondary { background: var(--secondary-color); color: white; }
+    .btn-secondary:hover { background: var(--secondary-hover); transform: translateY(-2px); }
+    .btn:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
+    .modal-overlay.show { display: flex; }
+    .modal-content { position: relative; background: var(--bg-white); padding: 1.5rem; border-radius: 12px; width: 90%; max-width: 700px; }
+    .modal-close-btn { position: absolute; top: 10px; right: 10px; background: var(--bg-light); border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 1.5rem; cursor: pointer; }
+    .modal-video-container { position: relative; width: 100%; padding-top: 75%; background: #000; border-radius: 8px; overflow: hidden; }
+    #webcam, #output_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    .modal-capture-btn { background: white; border: 4px solid var(--primary-color); border-radius: 50%; width: 64px; height: 64px; cursor: pointer; display: block; margin: 2rem auto 1rem; }
+    .photo-gallery { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; max-width: 900px; }
+    .photo-gallery img { width: 160px; height: 120px; border: 3px solid var(--border-color); border-radius: 8px; object-fit: cover; box-shadow: var(--shadow); }
+    .status { margin-top: 0; font-size: 1rem; font-weight: 500; min-height: 24px; padding: 0.5rem 1rem; border-radius: 8px; }
+    .status.success { background: #dcfce7; color: #166534; }
+    .status.error { background: #fee2e2; color: #991b1b; }
+    .status.info { background: #e0f2fe; color: #075985; }
+  </style>
 </head>
 <body>
+  <header class="header">
+    <div class="brand">Veriface</div>
+    <nav class="nav">
+      <a id="captureNav" class="active">Capture</a>
+      <a id="studentListNav">Student-List</a>
+      <a id="insightsNav">Insights</a>
+    </nav>
+  </header>
 
-    <header class="header">
-        <div class="brand">Veriface</div>
-        <nav class="nav">
-            <a id="captureNav" class="active">Capture</a>
-            <a id="studentListNav">Student-List</a>
-            <a id="insightsNav">Insights</a>
-        </nav>
-    </header>
-
-    <main class="main-content">
-        <div class="capture-card">
-            <h2>Capture Attendance</h2>
-            <p>Click the camera to start a session. You can capture multiple photos of the class.</p>
-            <div id="openCameraModalBtn" class="camera-icon-container">
-                <svg class="camera-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.776 48.776 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>
-            </div>
-            <div class="action-buttons">
-                <button id="openLateModalBtn" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    Mark Late Arrivals
-                </button>
-                <button id="uploadBtn" class="btn btn-primary" disabled>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
-                    Upload Attendance
-                </button>
-            </div>
-        </div>
-        <p id="status" class="status"></p>
-        <div id="photoGallery" class="photo-gallery"></div>
-    </main>
-
-    <div id="cameraModal" class="modal-overlay"><div class="modal-content camera-modal-content"><button id="closeCameraModalBtn" class="modal-close-btn">&times;</button><div class="modal-video-container"><video id="webcam" autoplay playsinline></video><canvas id="output_canvas" width="640" height="480"></canvas></div><button id="modalCaptureBtn" class="modal-capture-btn"></button></div></div>
-    <div id="lateModal" class="modal-overlay"><div class="modal-content late-modal-content"><button id="closeLateModalBtn" class="modal-close-btn">&times;</button><h3>Mark Late Arrivals</h3><div id="lateStudentChecklist" class="checkbox-list"></div></div></div>
-    
-    <div id="reportModal" class="modal-overlay">
-        <div class="modal-content report-modal-content">
-            <button id="closeReportModalBtn" class="modal-close-btn">&times;</button>
-            <h3>Latest Attendance Report</h3>
-            <div id="reportContent" class="report-content">
-                </div>
-        </div>
+  <main class="main-content">
+    <div class="capture-card">
+      <h2>Capture Attendance</h2>
+      <p>Click the camera to start a session. You can capture multiple photos of the class.</p>
+      <div id="openCameraModalBtn" class="camera-icon-container">
+        <svg class="camera-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.776 48.776 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/>
+        </svg>
+      </div>
+      <div class="action-buttons">
+        <button id="openLateModalBtn" class="btn btn-secondary">Mark Late Arrivals</button>
+        <button id="uploadBtn" class="btn btn-primary" disabled>Upload Attendance</button>
+      </div>
     </div>
+    <p id="status" class="status"></p>
+    <div id="photoGallery" class="photo-gallery"></div>
+  </main>
 
+  <div id="cameraModal" class="modal-overlay">
+    <div class="modal-content camera-modal-content">
+      <button id="closeCameraModalBtn" class="modal-close-btn">&times;</button>
+      <div class="modal-video-container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas" width="640" height="480"></canvas>
+      </div>
+      <button id="modalCaptureBtn" class="modal-capture-btn"></button>
+    </div>
+  </div>
 
-    <script>
-        // === GET HTML ELEMENTS ===
-        const openCameraModalBtn = document.getElementById('openCameraModalBtn');
-        const closeCameraModalBtn = document.getElementById('closeCameraModalBtn');
-        const cameraModal = document.getElementById('cameraModal');
-        const openLateModalBtn = document.getElementById('openLateModalBtn');
-        const closeLateModalBtn = document.getElementById('closeLateModalBtn');
-        const lateModal = document.getElementById('lateModal');
-        const studentListNav = document.getElementById('studentListNav');
-        const reportModal = document.getElementById('reportModal');
-        const closeReportModalBtn = document.getElementById('closeReportModalBtn');
-        const reportContent = document.getElementById('reportContent');
-        // ... (rest of your existing element selections)
-        const modalCaptureBtn = document.getElementById('modalCaptureBtn');
-        const videoElement = document.getElementById('webcam');
-        const canvasElement = document.getElementById('output_canvas');
-        const canvasCtx = canvasElement.getContext('2d');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const photoGallery = document.getElementById('photoGallery');
-        const statusEl = document.getElementById('status');
-        const lateStudentChecklist = document.getElementById('lateStudentChecklist');
-        const SERVER_URL = 'http://localhost:5000'; // Base URL for server
+  <div id="lateModal" class="modal-overlay">
+    <div class="modal-content">
+      <button id="closeLateModalBtn" class="modal-close-btn">&times;</button>
+      <h3>Mark Late Arrivals</h3>
+      <div id="lateStudentChecklist" class="checkbox-list"></div>
+    </div>
+  </div>
 
-        let camera = null;
+  <div id="reportModal" class="modal-overlay">
+    <div class="modal-content">
+      <button id="closeReportModalBtn" class="modal-close-btn">&times;</button>
+      <h3>Latest Attendance Report</h3>
+      <div id="reportContent"></div>
+    </div>
+  </div>
 
-        // === STUDENT LIST AND CHECKBOX GENERATION ---
-        const studentList = ["Student A", "Student B", "Student C", "Chris Evans", "Elon Musk", "Emma Watson", "John Doe", "Jane Smith"];
-        function populateLateCheckboxes() { /* ... same as before ... */ lateStudentChecklist.innerHTML = ''; studentList.forEach(name => { const item = document.createElement('div'); item.className = 'checkbox-item'; item.innerHTML = `<input type="checkbox" id="student-${name.replace(/\s+/g, '-')}"><label for="student-${name.replace(/\s+/g, '-')}">${name}</label>`; lateStudentChecklist.appendChild(item); }); }
-        document.addEventListener('DOMContentLoaded', populateLateCheckboxes);
+  <script>
+    const openCameraModalBtn = document.getElementById('openCameraModalBtn');
+    const closeCameraModalBtn = document.getElementById('closeCameraModalBtn');
+    const cameraModal = document.getElementById('cameraModal');
+    const openLateModalBtn = document.getElementById('openLateModalBtn');
+    const closeLateModalBtn = document.getElementById('closeLateModalBtn');
+    const lateModal = document.getElementById('lateModal');
+    const studentListNav = document.getElementById('studentListNav');
+    const reportModal = document.getElementById('reportModal');
+    const closeReportModalBtn = document.getElementById('closeReportModalBtn');
+    const reportContent = document.getElementById('reportContent');
+    const modalCaptureBtn = document.getElementById('modalCaptureBtn');
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const photoGallery = document.getElementById('photoGallery');
+    const statusEl = document.getElementById('status');
+    const lateStudentChecklist = document.getElementById('lateStudentChecklist');
+    const SERVER_URL = 'http://localhost:5000';
 
-        // --- MODAL LOGIC ---
-        function openCameraModal() { cameraModal.classList.add('show'); startCamera(); }
-        function closeCameraModal() { cameraModal.classList.remove('show'); stopCamera(); }
-        function openLateModal() { lateModal.classList.add('show'); }
-        function closeLateModal() { lateModal.classList.remove('show'); }
-        function openReportModal() { reportModal.classList.add('show'); }
-        function closeReportModal() { reportModal.classList.remove('show'); }
+    let videoStream = null;
 
-        // --- NEW: FETCH AND DISPLAY REPORT ---
-        async function fetchAndDisplayReport() {
-            reportContent.innerHTML = '<p>Loading report...</p>';
-            openReportModal();
-            try {
-                const response = await fetch(`${SERVER_URL}/get-latest-report`);
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.message || 'Failed to fetch report.');
-                }
-                const data = await response.json();
+    const studentList = ["Student A", "Student B", "Student C", "Chris Evans", "Elon Musk", "Emma Watson", "John Doe", "Jane Smith"];
+    function populateLateCheckboxes() {
+      lateStudentChecklist.innerHTML = '';
+      studentList.forEach(name => {
+        const id = "student-" + encodeURIComponent(name);
+        const item = document.createElement('div');
+        item.className = 'checkbox-item';
+        item.innerHTML = `<input type="checkbox" id="${id}"><label for="${id}">${name}</label>`;
+        lateStudentChecklist.appendChild(item);
+      });
+    }
+    document.addEventListener('DOMContentLoaded', populateLateCheckboxes);
 
-                if (data.length === 0) {
-                    reportContent.innerHTML = '<p>No attendance data found in the latest report.</p>';
-                    return;
-                }
-                
-                // Build the table
-                const table = document.createElement('table');
-                table.className = 'report-table';
-                
-                const thead = document.createElement('thead');
-                thead.innerHTML = `<tr><th>Timestamp</th><th>Name</th><th>Status</th></tr>`;
-                table.appendChild(thead);
+    function openCameraModal() { cameraModal.classList.add('show'); startCamera(); }
+    function closeCameraModal() { cameraModal.classList.remove('show'); stopCamera(); }
+    function openLateModal() { lateModal.classList.add('show'); }
+    function closeLateModal() { lateModal.classList.remove('show'); }
+    function openReportModal() { reportModal.classList.add('show'); }
+    function closeReportModal() { reportModal.classList.remove('show'); }
 
-                const tbody = document.createElement('tbody');
-                data.forEach(row => {
-                    const tr = document.createElement('tr');
-                    const statusClass = row['Status (Present/Absent)'].toLowerCase();
-                    tr.innerHTML = `
-                        <td>${row.Timestamp}</td>
-                        <td>${row.Name}</td>
-                        <td class="${statusClass}">${row['Status (Present/Absent)']}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-                table.appendChild(tbody);
+    async function startCamera() {
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: 640, height: 480 }
+        });
+        videoElement.srcObject = videoStream;
+        await videoElement.play();
+        processFrame();
+      } catch (err) {
+        console.error("Camera error:", err);
+      }
+    }
+    function stopCamera() {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+        videoElement.srcObject = null;
+      }
+    }
 
-                reportContent.innerHTML = '';
-                reportContent.appendChild(table);
+    const faceDetection = new FaceDetection({
+      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
+    });
+    faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.5 });
 
-            } catch (error) {
-                reportContent.innerHTML = `<p style="color: #dc2626;">Error: ${error.message}</p>`;
-                console.error('Failed to fetch report:', error);
-            }
+    function processFrame() {
+      if (!videoStream) return;
+      faceDetection.send({ image: videoElement });
+      requestAnimationFrame(processFrame);
+    }
+
+    faceDetection.onResults(results => {
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+      if (results.detections) {
+        for (const det of results.detections) {
+          const bb = det.boundingBox;
+          canvasCtx.strokeStyle = "#4f46e5";
+          canvasCtx.lineWidth = 4;
+          canvasCtx.strokeRect(bb.xCenter - bb.width/2, bb.yCenter - bb.height/2, bb.width, bb.height);
         }
-        
-        // --- CAMERA AND MEDIAPIPE LOGIC ---
-        function startCamera() { /* ... same as before ... */ camera = new Camera(videoElement, { onFrame: async () => { await faceDetection.send({ image: videoElement }); }, width: 640, height: 480 }); camera.start(); }
-        function stopCamera() { /* ... same as before ... */ if (camera) { camera.stop(); camera = null; } }
-        const faceDetection = new FaceDetection({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` });
-        faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.5 });
-        function onResults(results) { /* ... same as before ... */ canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height); canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height); if (results.detections) { for (const detection of results.detections) { drawRectangle(canvasCtx, detection.boundingBox, { color: '#4f46e5', lineWidth: 4, fillColor: '#00000000' }); } } }
-        faceDetection.onResults(onResults);
+      }
+    });
 
-        // --- CAPTURE AND UPLOAD LOGIC ---
-        function capturePhoto() { /* ... same as before ... */ if (!camera) return; const imageDataUrl = canvasElement.toDataURL('image/jpeg', 0.7); const img = document.createElement('img'); img.src = imageDataUrl; img.alt = "Captured Photo"; photoGallery.appendChild(img); uploadBtn.disabled = false; }
-        async function uploadPhotos() {
-            const images = document.querySelectorAll('#photoGallery img');
-            if (images.length === 0) { statusEl.textContent = 'No photos to upload.'; statusEl.className = 'status info'; return; }
-            statusEl.textContent = 'Uploading & Processing...'; statusEl.className = 'status info';
-            uploadBtn.disabled = true;
-            const imageData = Array.from(images).map(img => img.src);
-            try {
-                const response = await fetch(`${SERVER_URL}/upload`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ images: imageData })
-                });
-                if (!response.ok) { throw new Error(`Server error: ${response.statusText}`); }
-                const result = await response.json();
-                statusEl.textContent = `✅ ${result.message}`; statusEl.className = 'status success';
-            } catch (error) {
-                console.error('Upload failed:', error);
-                statusEl.textContent = `❌ Upload failed. See console for details.`; statusEl.className = 'status error';
-            } finally {
-                uploadBtn.disabled = false;
-            }
+    async function fetchAndDisplayReport() {
+      reportContent.innerHTML = '<p>Loading report...</p>';
+      openReportModal();
+      try {
+        const response = await fetch(`${SERVER_URL}/get-latest-report`);
+        if (!response.ok) throw new Error('Failed to fetch report.');
+        const data = await response.json();
+        if (data.length === 0) {
+          reportContent.innerHTML = '<p>No attendance data found.</p>';
+          return;
         }
+        const table = document.createElement('table');
+        table.className = 'report-table';
+        table.innerHTML = `<thead><tr><th>Timestamp</th><th>Name</th><th>Status</th></tr></thead>`;
+        const tbody = document.createElement('tbody');
+        data.forEach(row => {
+          const statusText = row['Status (Present/Absent)'] || "Unknown";
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${row.Timestamp || ""}</td><td>${row.Name || ""}</td><td>${statusText}</td>`;
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        reportContent.innerHTML = '';
+        reportContent.appendChild(table);
+      } catch (error) {
+        reportContent.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+      }
+    }
 
-        // === EVENT LISTENERS ===
-        openCameraModalBtn.addEventListener('click', openCameraModal);
-        closeCameraModalBtn.addEventListener('click', closeCameraModal);
-        openLateModalBtn.addEventListener('click', openLateModal);
-        closeLateModalBtn.addEventListener('click', closeLateModal);
-        studentListNav.addEventListener('click', fetchAndDisplayReport);
-        closeReportModalBtn.addEventListener('click', closeReportModal);
-        modalCaptureBtn.addEventListener('click', capturePhoto);
-        uploadBtn.addEventListener('click', uploadPhotos);
-    </script>
+    function capturePhoto() {
+      if (!videoStream) return;
+      const imageDataUrl = canvasElement.toDataURL('image/jpeg', 0.7);
+      const img = document.createElement('img');
+      img.src = imageDataUrl;
+      photoGallery.appendChild(img);
+      uploadBtn.disabled = false;
+    }
+
+    async function uploadPhotos() {
+      const images = document.querySelectorAll('#photoGallery img');
+      if (images.length === 0) return;
+      statusEl.textContent = 'Uploading & Processing...';
+      statusEl.className = 'status info';
+      uploadBtn.disabled = true;
+      const formData = new FormData();
+      images.forEach((img, i) => {
+        formData.append(`image_${i}`, dataURLtoBlob(img.src), `photo_${i}.jpg`);
+      });
+      try {
+        const res = await fetch(`${SERVER_URL}/upload`, { method: 'POST', body: formData });
+        const result = await res.json();
+        statusEl.textContent = `✅ ${result.message || "Upload successful"}`;
+        statusEl.className = 'status success';
+      } catch (err) {
+        statusEl.textContent = '❌ Upload failed.';
+        statusEl.className = 'status error';
+      } finally {
+        uploadBtn.disabled = false;
+      }
+    }
+
+    function dataURLtoBlob(dataURL) {
+      const parts = dataURL.split(',');
+      const mime = parts[0].match(/:(.*?);/)[1];
+      const binary = atob(parts[1]);
+      let arr = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+      return new Blob([arr], { type: mime });
+    }
+
+    openCameraModalBtn.addEventListener('click', openCameraModal);
+    closeCameraModalBtn.addEventListener('click', closeCameraModal);
+    openLateModalBtn.addEventListener('click', openLateModal);
+    closeLateModalBtn.addEventListener('click', closeLateModal);
+    studentListNav.addEventListener('click', fetchAndDisplayReport);
+    closeReportModalBtn.addEventListener('click', closeReportModal);
+    modalCaptureBtn.addEventListener('click', capturePhoto);
+    uploadBtn.addEventListener('click', uploadPhotos);
+  </script>
 </body>
 </html>
